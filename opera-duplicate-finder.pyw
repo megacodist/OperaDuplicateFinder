@@ -1,3 +1,4 @@
+from enum import IntEnum
 from pathlib import Path
 import PIL.Image, PIL.ImageTk
 from tkinter import filedialog
@@ -8,6 +9,14 @@ from typing import Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from megacodist.text import GetStringDimensions
+
+
+class ItemType(IntEnum):
+    unknown = 0
+    folder = 1
+    file = 2
+
 
 class _DirectoryEventHandler(FileSystemEventHandler):
     def __init__(self, dupFinder: Any) -> None:
@@ -16,12 +25,12 @@ class _DirectoryEventHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         itemLabel = Path(event.src_path).name
-        self._dupFinder.lstbx_items.insert(tk.END, itemLabel)
+        self._dupFinder.trvw_items.insert(tk.END, itemLabel)
 
     def on_deleted(self, event):
         itemLabel = Path(event.src_path).name
-        itemIndex = self._dupFinder.lstbx_items.get(0, tk.END).index(itemLabel)
-        self._dupFinder.lstbx_items.delete(itemIndex)
+        itemIndex = self._dupFinder.trvw_items.get(0, tk.END).index(itemLabel)
+        self._dupFinder.trvw_items.delete(itemIndex)
 
     def on_moved(self, event):
         print('moved')
@@ -33,6 +42,8 @@ class DupFinder(tk.Tk):
 
         # Initializing the window...
         self.title('Duplicate remover')
+        self.theme = ttk.Style()
+        self.theme.theme_use('clam')
 
         # 
         self.frm_toolbar = ttk.Frame(
@@ -44,20 +55,40 @@ class DupFinder(tk.Tk):
             pady=(2, 1,)
         )
 
-        # Loading 'open.png'...
-        self.img_path = Path(__file__).resolve().parent
-        self.img_path = self.img_path / 'res/open.png'
-        self.img_path = PIL.Image.open(self.img_path)
-        self.img_path = self.img_path.resize(size=(20, 20,))
-        self.img_path = PIL.ImageTk.PhotoImage(image=self.img_path)
+        # Loading images...
+        # Loading 'browse.png'...
+        self.img_browse = Path(__file__).resolve().parent
+        self.img_browse = self.img_browse / 'res/browse.png'
+        self.img_browse = PIL.Image.open(self.img_browse)
+        self.img_browse = self.img_browse.resize(size=(20, 20,))
+        self.img_browse = PIL.ImageTk.PhotoImage(image=self.img_browse)
+        # Loading 'folder.png'...
+        self.img_folder = Path(__file__).resolve().parent
+        self.img_folder = self.img_folder / 'res/folder.png'
+        self.img_folder = PIL.Image.open(self.img_folder)
+        self.img_folder = self.img_folder.resize(size=(20, 20,))
+        self.img_folder = PIL.ImageTk.PhotoImage(image=self.img_folder)
+        # Loading 'file.png'...
+        self.img_file = Path(__file__).resolve().parent
+        self.img_file = self.img_file / 'res/file.png'
+        self.img_file = PIL.Image.open(self.img_file)
+        self.img_file = self.img_file.resize(size=(20, 20,))
+        self.img_file = PIL.ImageTk.PhotoImage(image=self.img_file)
+        # Loading 'unknown.png'...
+        self.img_unknown = Path(__file__).resolve().parent
+        self.img_unknown = self.img_unknown / 'res/unknown.png'
+        self.img_unknown = PIL.Image.open(self.img_unknown)
+        self.img_unknown = self.img_unknown.resize(size=(20, 20,))
+        self.img_unknown = PIL.ImageTk.PhotoImage(image=self.img_unknown)
+
         #
         self.btn_path = ttk.Button(
             self.frm_toolbar,
-            image=self.img_path,
+            image=self.img_browse,
             command=self._BrowseDir
         )
         self.btn_path.pack(
-            side='right'
+            side='left'
         )
 
         #
@@ -92,16 +123,29 @@ class DupFinder(tk.Tk):
             self.frm_items,
             orient='horizontal'
         )
-        self.lstbx_items = tk.Listbox(
+        self.trvw_items = ttk.Treeview(
             self.frm_items,
+            show='tree headings',
             xscrollcommand=self.hscrlbr_items.set,
             yscrollcommand=self.vscrlbr_items.set
         )
         self.vscrlbr_items.config(
-            command=self.lstbx_items.yview
+            command=self.trvw_items.yview
         )
         self.hscrlbr_items.config(
-            command=self.lstbx_items.xview
+            command=self.trvw_items.xview
+        )
+        # Configuring the default heading & column...
+        self.trvw_items.heading(
+            '#0',
+            text='Name',
+            anchor=tk.W
+        )
+        self.trvw_items.column(
+            '#0',
+            width=200,
+            stretch=False,
+            anchor=tk.W
         )
         self.hscrlbr_items.pack(
             side='bottom',
@@ -111,7 +155,7 @@ class DupFinder(tk.Tk):
             side='right',
             fill='y'
         )
-        self.lstbx_items.pack(
+        self.trvw_items.pack(
             fill='both',
             expand=1,
             padx=3,
@@ -145,11 +189,11 @@ class DupFinder(tk.Tk):
             # Folder DOES NOT exist, first chaning color to red...
             self.entry_path.config(foreground='red')
             # Then emptying the list...
-            self.lstbx_items.delete(0, 'end')
+            self.trvw_items.delete(*self.trvw_items.get_children())
 
     def _EnumFiles(self):
         # First of all emptying the list...
-        self.lstbx_items.delete(0, 'end')
+        self.trvw_items.delete(*self.trvw_items.get_children())
 
         # Second of all populating the list with files...
         currentDir = Path(self.strvar_path.get()).resolve()
@@ -168,8 +212,49 @@ class DupFinder(tk.Tk):
                 )
             )
             # Adding the items to the listbox...
+            maxWidth = 100
+            from tkinter.font import Font
+            font_ = Font(
+                name='Times New Roman',
+                size=10
+            )
+
+            parentNode = self.trvw_items.insert(
+                '',
+                index=tk.END,
+                text=item.parent,
+                image=self.img_folder,
+                open=True
+            )
             for item in items:
-                self.lstbx_items.insert(tk.END, item.name)
+                if item.is_dir():
+                    itemType = ItemType.folder
+                    itemImage = self.img_folder
+                elif item.is_file():
+                    itemType = ItemType.file
+                    itemImage = self.img_file
+                else:
+                    itemType = ItemType.unknown
+                    itemImage = self.img_unknown
+                
+                itemWidth = font_.measure(item.name)
+                if itemWidth > maxWidth:
+                    maxWidth = itemWidth
+                
+                self.trvw_items.insert(
+                    parent=parentNode,
+                    index=tk.END,
+                    text=item.name,
+                    image=itemImage,
+                    values=(
+                        itemType,
+                    )
+                )
+            
+            self.trvw_items.column(
+                '#0',
+                width=maxWidth+30
+            )
         except PermissionError as e:
             messagebox.showerror(
                 'Access is denied',
