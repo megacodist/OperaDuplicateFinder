@@ -4,52 +4,116 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from enum import IntEnum
 from pathlib import Path
 import PIL.Image, PIL.ImageTk
 from tkinter import filedialog
 from tkinter import messagebox
 import tkinter as tk
 from tkinter import ttk
+from tkinter.font import nametofont
 from typing import Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from megacodist.text import GetStringDimensions
-
-
-class ItemType(IntEnum):
-    unknown = 0
-    folder = 1
-    file = 2
-
-
-class _DirectoryEventHandler(FileSystemEventHandler):
-    def __init__(self, dupFinder: Any) -> None:
-        super().__init__()
-        self._dupFinder = dupFinder
-
-    def on_created(self, event):
-        itemLabel = Path(event.src_path).name
-        self._dupFinder.trvw_items.insert(tk.END, itemLabel)
-
-    def on_deleted(self, event):
-        itemLabel = Path(event.src_path).name
-        itemIndex = self._dupFinder.trvw_items.get(0, tk.END).index(itemLabel)
-        self._dupFinder.trvw_items.delete(itemIndex)
-
-    def on_moved(self, event):
-        print('moved')
 
 
 class DupFinder(tk.Tk):
-    def __init__(self, dir=None) -> None:
+    class DirectoryEventHandler(FileSystemEventHandler):
+        def __init__(self, dupFinder: Any) -> None:
+            super().__init__()
+            self._trvw = dupFinder
+
+        def on_created(self, event):
+            itemLabel = Path(event.src_path).name
+            self._trvw.trvw_files.insert(tk.END, itemLabel)
+
+        def on_deleted(self, event):
+            itemLabel = Path(event.src_path).name
+            itemIndex = self._trvw.trvw_files.get(0, tk.END).index(itemLabel)
+            self._trvw.trvw_files.delete(itemIndex)
+
+        def on_moved(self, event):
+            print('moved')
+    
+    def __init__(self) -> None:
         super().__init__()
 
         # Initializing the window...
         self.title('Duplicate remover')
         self.theme = ttk.Style()
         self.theme.theme_use('clam')
+
+        # Defining of required variables...
+        self._dirs : list[str] = []
+        self._columnMinWidth : int = None
+        self._fsHandler = None
+        self._observers : list[Observer] = []
+
+        # Defining of resources...
+        self.img_browse = None
+        self.img_folder = None
+        self.img_file = None
+        self.img_unknown = None
+
+        # Defining of GUI widgets...
+        self.frm_toolbar = None
+        self.frm_files = None
+        self.btn_browse = None
+        self.btn_duplicate = None
+        self.btn_license = None
+        self.vscrlbr_files = None
+        self.hscrlbr_files = None
+        self.trvw_files = None
+
+        self._LoadResources()
+        self._InitializeGUI()
+
+        # Initializing last item...
+        self._fsHandler = DupFinder.DirectoryEventHandler(dupFinder=self)
+    
+    def _LoadResources(self) -> None:
+        '''Loads resources using the the GUI.'''
+
+        # Loading images...
+        # Loading 'browse.png'...
+        self.img_browse = Path(__file__).resolve().parent
+        self.img_browse = self.img_browse / 'res/browse.png'
+        self.img_browse = PIL.Image.open(self.img_browse)
+        self.img_browse = self.img_browse.resize(size=(24, 24,))
+        self.img_browse = PIL.ImageTk.PhotoImage(image=self.img_browse)
+        # Loading 'folder.png'...
+        self.img_folder = Path(__file__).resolve().parent
+        self.img_folder = self.img_folder / 'res/folder.png'
+        self.img_folder = PIL.Image.open(self.img_folder)
+        self.img_folder = self.img_folder.resize(size=(24, 24,))
+        self.img_folder = PIL.ImageTk.PhotoImage(image=self.img_folder)
+        # Loading 'file.png'...
+        self.img_file = Path(__file__).resolve().parent
+        self.img_file = self.img_file / 'res/file.png'
+        self.img_file = PIL.Image.open(self.img_file)
+        self.img_file = self.img_file.resize(size=(24, 24,))
+        self.img_file = PIL.ImageTk.PhotoImage(image=self.img_file)
+        # Loading 'unknown.png'...
+        self.img_unknown = Path(__file__).resolve().parent
+        self.img_unknown = self.img_unknown / 'res/unknown.png'
+        self.img_unknown = PIL.Image.open(self.img_unknown)
+        self.img_unknown = self.img_unknown.resize(size=(24, 24,))
+        self.img_unknown = PIL.ImageTk.PhotoImage(image=self.img_unknown)
+        # Loading 'duplicate.png'...
+        self.img_duplicate = Path(__file__).resolve().parent
+        self.img_duplicate = self.img_duplicate / 'res/duplicate.png'
+        self.img_duplicate = PIL.Image.open(self.img_duplicate)
+        self.img_duplicate = self.img_duplicate.resize(size=(24, 24,))
+        self.img_duplicate = PIL.ImageTk.PhotoImage(image=self.img_duplicate)
+        # Loading 'license.png'...
+        self.img_license = Path(__file__).resolve().parent
+        self.img_license = self.img_license / 'res/license.png'
+        self.img_license = PIL.Image.open(self.img_license)
+        self.img_license = self.img_license.resize(size=(24, 24,))
+        self.img_license = PIL.ImageTk.PhotoImage(image=self.img_license)
+    
+    def _InitializeGUI(self) -> None:
+        '''Initializes the GUI of this window with Tcl/Tk widgets.'''
 
         # 
         self.frm_toolbar = ttk.Frame(
@@ -61,59 +125,40 @@ class DupFinder(tk.Tk):
             pady=(2, 1,)
         )
 
-        # Loading images...
-        # Loading 'browse.png'...
-        self.img_browse = Path(__file__).resolve().parent
-        self.img_browse = self.img_browse / 'res/browse.png'
-        self.img_browse = PIL.Image.open(self.img_browse)
-        self.img_browse = self.img_browse.resize(size=(20, 20,))
-        self.img_browse = PIL.ImageTk.PhotoImage(image=self.img_browse)
-        # Loading 'folder.png'...
-        self.img_folder = Path(__file__).resolve().parent
-        self.img_folder = self.img_folder / 'res/folder.png'
-        self.img_folder = PIL.Image.open(self.img_folder)
-        self.img_folder = self.img_folder.resize(size=(20, 20,))
-        self.img_folder = PIL.ImageTk.PhotoImage(image=self.img_folder)
-        # Loading 'file.png'...
-        self.img_file = Path(__file__).resolve().parent
-        self.img_file = self.img_file / 'res/file.png'
-        self.img_file = PIL.Image.open(self.img_file)
-        self.img_file = self.img_file.resize(size=(20, 20,))
-        self.img_file = PIL.ImageTk.PhotoImage(image=self.img_file)
-        # Loading 'unknown.png'...
-        self.img_unknown = Path(__file__).resolve().parent
-        self.img_unknown = self.img_unknown / 'res/unknown.png'
-        self.img_unknown = PIL.Image.open(self.img_unknown)
-        self.img_unknown = self.img_unknown.resize(size=(20, 20,))
-        self.img_unknown = PIL.ImageTk.PhotoImage(image=self.img_unknown)
-
         #
-        self.btn_path = ttk.Button(
+        self.btn_browse = ttk.Button(
             self.frm_toolbar,
             image=self.img_browse,
             command=self._BrowseDir
         )
-        self.btn_path.pack(
+        self.btn_browse.pack(
             side='left'
         )
 
         #
-        self.strvar_path = tk.StringVar(self.frm_toolbar)
-        self.entry_path = ttk.Entry(
-            self.frm_toolbar,
-            textvariable=self.strvar_path
+        self.btn_duplicate = ttk.Button(
+            master=self.frm_toolbar,
+            image=self.img_duplicate,
+            state=tk.DISABLED
         )
-        self.entry_path.pack(
-            fill='both',
-            pady=4,
-            padx=4
+        self.btn_duplicate.pack(
+            side=tk.LEFT
         )
 
         #
-        self.frm_items = ttk.Frame(
+        self.btn_license = ttk.Button(
+            master=self.frm_toolbar,
+            image=self.img_license
+        )
+        self.btn_license.pack(
+            side=tk.LEFT
+        )
+
+        #
+        self.frm_files = ttk.Frame(
             self
         )
-        self.frm_items.pack(
+        self.frm_files.pack(
             fill='both',
             expand=1,
             padx=2,
@@ -121,47 +166,49 @@ class DupFinder(tk.Tk):
         )
 
         #
-        self.vscrlbr_items = ttk.Scrollbar(
-            self.frm_items,
+        self.vscrlbr_files = ttk.Scrollbar(
+            self.frm_files,
             orient='vertical'
         )
-        self.hscrlbr_items = ttk.Scrollbar(
-            self.frm_items,
+        self.hscrlbr_files = ttk.Scrollbar(
+            self.frm_files,
             orient='horizontal'
         )
-        self.trvw_items = ttk.Treeview(
-            self.frm_items,
+        self.trvw_files = ttk.Treeview(
+            self.frm_files,
             show='tree headings',
-            xscrollcommand=self.hscrlbr_items.set,
-            yscrollcommand=self.vscrlbr_items.set
+            selectmode='browse',
+            xscrollcommand=self.hscrlbr_files.set,
+            yscrollcommand=self.vscrlbr_files.set
         )
-        self.vscrlbr_items.config(
-            command=self.trvw_items.yview
+        self.vscrlbr_files.config(
+            command=self.trvw_files.yview
         )
-        self.hscrlbr_items.config(
-            command=self.trvw_items.xview
+        self.hscrlbr_files.config(
+            command=self.trvw_files.xview
         )
-        # Configuring the default heading & column...
-        self.trvw_items.heading(
+        # Configuring the default heading...
+        self.trvw_files.heading(
             '#0',
             text='Name',
             anchor=tk.W
         )
-        self.trvw_items.column(
+        # Configuring the default column...
+        self.trvw_files.column(
             '#0',
             width=200,
             stretch=False,
             anchor=tk.W
         )
-        self.hscrlbr_items.pack(
+        self.hscrlbr_files.pack(
             side='bottom',
             fill='x'
         )
-        self.vscrlbr_items.pack(
+        self.vscrlbr_files.pack(
             side='right',
             fill='y'
         )
-        self.trvw_items.pack(
+        self.trvw_files.pack(
             fill='both',
             expand=1,
             padx=3,
@@ -170,96 +217,93 @@ class DupFinder(tk.Tk):
 
         # Binding events...
         self.wait_visibility()
-        self.strvar_path.trace('w', self._OnDirChanged)
-
-        # Initializing path...
-        self._fsHandler = _DirectoryEventHandler(self)
-        if dir and isinstance(dir, str):
-            self.strvar_path.set(dir)
-        else:
-            self.strvar_path.set(Path().cwd())
+        self.trvw_files.bind('<<TreeviewSelect>>', self._OnNodeChanged)
         
     def _BrowseDir(self):
-        folder = filedialog.askdirectory(initialdir=self.strvar_path.get())
+        folder = filedialog.askdirectory(initialdir=Path.cwd())
         if folder:
-            self.strvar_path.set(folder)
+            self._EnumFiles(folder)
     
-    def _OnDirChanged(self, *_):
-        folder = Path(self.strvar_path.get())
-        if folder.exists():
-            # Folder exists, first chaning color to green...
-            self.entry_path.config(foreground='green')
-            # Then enumerating files...
-            self._EnumFiles()
-        else:
-            # Folder DOES NOT exist, first chaning color to red...
-            self.entry_path.config(foreground='red')
-            # Then emptying the list...
-            self.trvw_items.delete(*self.trvw_items.get_children())
+    def _OnNodeChanged(self, event:tk.Event):
+        # Getting childern of selected node
+        selectedItemID = self.trvw_files.selection()
+        if not selectedItemID:
+            # All items have been deselected, so disabling the duplicate button...
+            self.btn_duplicate['state'] = tk.DISABLED
+            return
 
-    def _EnumFiles(self):
+        selectedItemID = selectedItemID[0]
+        childern = self.trvw_files.get_children(selectedItemID)
+
+        if len(childern):
+            self.btn_duplicate['state'] = tk.NORMAL
+        else:
+            self.btn_duplicate['state'] = tk.DISABLED
+        
+        '''# Printing the text of selected item in Treeview & all its parent...
+        while selectedItemID:
+            print(self.trvw_files.item(selectedItemID, option='text'))
+            selectedItemID = self.trvw_files.parent(selectedItemID)'''
+
+    def _EnumFiles(self, folder: str):
         # First of all emptying the list...
-        self.trvw_items.delete(*self.trvw_items.get_children())
+        self.trvw_files.delete(*self.trvw_files.get_children())
+        self._observers.clear()
 
         # Second of all populating the list with files...
-        currentDir = Path(self.strvar_path.get()).resolve()
+        currentDir = Path(folder).resolve()
         try:
-            # Retreiving all items in the folder...
+            # Retreiving all files in the folder...
             items = []
             for item in currentDir.iterdir():
-                items.append(item)
+                if item.is_file():
+                    items.append(item)
+            
             # Sorting items:
             #   folders at the top
             #   files in a way that XXXX.X comes before XXXX (1).X, XXXX (2).X
-            items.sort(
-                key=lambda fsItem : (
-                    0 if fsItem.is_dir() else 1,
-                    fsItem.stem
-                )
-            )
-            # Adding the items to the listbox...
-            maxWidth = 100
-            from tkinter.font import Font
-            font_ = Font(
-                name='Times New Roman',
-                size=10
-            )
+            items.sort(key=lambda file : file.stem)
 
-            parentNode = self.trvw_items.insert(
+            # Adding parent to to the treeview...
+            parentNode = self.trvw_files.insert(
                 '',
                 index=tk.END,
-                text=item.parent,
+                text=str(currentDir),
                 image=self.img_folder,
                 open=True
             )
-            for item in items:
-                if item.is_dir():
-                    itemType = ItemType.folder
-                    itemImage = self.img_folder
-                elif item.is_file():
-                    itemType = ItemType.file
-                    itemImage = self.img_file
-                else:
-                    itemType = ItemType.unknown
-                    itemImage = self.img_unknown
+            
+            # Getting minimum width of the column (step 1 of 3)...
+            self.update()
+            minColWidth = self.trvw_files.winfo_width()
+
+            # Getting minimum width of the column (step 2 of 3)...
+            appFont = nametofont('TkDefaultFont')
+            itemWidth = appFont.measure(item.parent) + 40
+            if itemWidth > minColWidth:
+                minColWidth = itemWidth
+            
+            # Adding the files to their folder in the treeview...
+            for item in items:                
+                # Getting minimum width of the column (step 3 of 3)...
+                itemWidth = appFont.measure(item.name) + 58
+                if itemWidth > minColWidth:
+                    minColWidth = itemWidth
                 
-                itemWidth = font_.measure(item.name)
-                if itemWidth > maxWidth:
-                    maxWidth = itemWidth
-                
-                self.trvw_items.insert(
+                self.trvw_files.insert(
                     parent=parentNode,
                     index=tk.END,
                     text=item.name,
-                    image=itemImage,
-                    values=(
-                        itemType,
-                    )
+                    image=self.img_file
                 )
             
-            self.trvw_items.column(
+            # Saving computed minimum width of the column...
+            self._columnMinWidth = minColWidth
+            
+            # Sizing the column to minimum width...
+            self.trvw_files.column(
                 '#0',
-                width=maxWidth+30
+                width=minColWidth
             )
         except PermissionError as e:
             messagebox.showerror(
@@ -272,13 +316,15 @@ class DupFinder(tk.Tk):
                 str(e)
             )
         
-        self._observer = Observer()
-        self._observer.schedule(
+        # Setting a file system observer for this folder...
+        observer = Observer()
+        observer.schedule(
             self._fsHandler,
-            self.strvar_path.get(),
-            recursive=True
+            folder,
+            recursive=False
         )
-        self._observer.start()
+        self._observers.append(observer)
+        observer.start()
 
 
 if (__name__ == '__main__'):
