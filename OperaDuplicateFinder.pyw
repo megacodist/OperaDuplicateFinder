@@ -15,6 +15,8 @@ from typing import Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from dialogs import TitlePathPair, LicenseDialog
+
 
 
 class DupFinder(tk.Tk):
@@ -40,12 +42,13 @@ class DupFinder(tk.Tk):
 
         # Initializing the window...
         self.title('Duplicate remover')
+        self.geometry('300x400+300+400')
         self.theme = ttk.Style()
         self.theme.theme_use('clam')
 
         # Defining of required variables...
         self._dirs : list[str] = []
-        self._columnMinWidth : int = None
+        self._columnMinWidth : int = 300 - 25
         self._fsHandler = None
         self._observers : list[Observer] = []
 
@@ -54,6 +57,8 @@ class DupFinder(tk.Tk):
         self.img_folder = None
         self.img_file = None
         self.img_unknown = None
+        self.img_duplicate = None
+        self.img_license = None
 
         # Defining of GUI widgets...
         self.frm_toolbar = None
@@ -67,6 +72,11 @@ class DupFinder(tk.Tk):
 
         self._LoadResources()
         self._InitializeGUI()
+
+        # Binding events...
+        self.wait_visibility()
+        self.trvw_files.bind('<<TreeviewSelect>>', self._OnItemSelectionChanged)
+        self.trvw_files.bind('<Configure>', self._OnTreeViewWidthChanged)
 
         # Initializing last item...
         self._fsHandler = DupFinder.DirectoryEventHandler(dupFinder=self)
@@ -148,7 +158,8 @@ class DupFinder(tk.Tk):
         #
         self.btn_license = ttk.Button(
             master=self.frm_toolbar,
-            image=self.img_license
+            image=self.img_license,
+            command=self._ShowLicense
         )
         self.btn_license.pack(
             side=tk.LEFT
@@ -196,7 +207,7 @@ class DupFinder(tk.Tk):
         # Configuring the default column...
         self.trvw_files.column(
             '#0',
-            width=200,
+            width=self._columnMinWidth,
             stretch=False,
             anchor=tk.W
         )
@@ -214,27 +225,32 @@ class DupFinder(tk.Tk):
             padx=3,
             pady=3
         )
-
-        # Binding events...
-        self.wait_visibility()
-        self.trvw_files.bind('<<TreeviewSelect>>', self._OnNodeChanged)
         
     def _BrowseDir(self):
-        folder = filedialog.askdirectory(initialdir=Path.cwd())
+        folder = filedialog.askdirectory(
+            initialdir=Path.cwd(),
+            title='Browse for a folder that contains duplicate files'
+        )
         if folder:
             self._EnumFiles(folder)
     
-    def _OnNodeChanged(self, event:tk.Event):
-        # Getting childern of selected node
+    def _OnTreeViewWidthChanged(self, event: tk.Event):
+        if event.width > self._columnMinWidth:
+            self.trvw_files.column('#0', width=event.width - 4)
+    
+    def _OnItemSelectionChanged(self, event:tk.Event):
+        # Checking selected item...
         selectedItemID = self.trvw_files.selection()
         if not selectedItemID:
-            # All items have been deselected, so disabling the duplicate button...
+            # This event has been fired for deselection, so disabling the duplicate button...
             self.btn_duplicate['state'] = tk.DISABLED
             return
 
+        # Getting selected item...
         selectedItemID = selectedItemID[0]
-        childern = self.trvw_files.get_children(selectedItemID)
 
+        # Checking that selected item is a folder (has got childern item(s))...
+        childern = self.trvw_files.get_children(selectedItemID)
         if len(childern):
             self.btn_duplicate['state'] = tk.NORMAL
         else:
@@ -264,38 +280,59 @@ class DupFinder(tk.Tk):
             #   files in a way that XXXX.X comes before XXXX (1).X, XXXX (2).X
             items.sort(key=lambda file : file.stem)
 
+            # Getting the font of the widget...
+            try:
+                wFont = self.trvw_files['font']
+            except tk.TclError:
+                wFont = nametofont('TkDefaultFont')
+            
+            # Getting minimum width of the column (step 1 of 3)...
+            # Initializing minColWidth with the width of the widget...
+            self.update()
+            minColWidth = self.trvw_files.winfo_width() - 4
+
             # Adding parent to to the treeview...
+            itemTextWidth = wFont.measure(str(currentDir))
             parentNode = self.trvw_files.insert(
                 '',
                 index=tk.END,
                 text=str(currentDir),
                 image=self.img_folder,
-                open=True
+                open=True,
+                values=(
+                    {
+                        'textWidth': itemTextWidth
+                    }
+                )
             )
-            
-            # Getting minimum width of the column (step 1 of 3)...
-            self.update()
-            minColWidth = self.trvw_files.winfo_width()
 
             # Getting minimum width of the column (step 2 of 3)...
-            appFont = nametofont('TkDefaultFont')
-            itemWidth = appFont.measure(item.parent) + 40
-            if itemWidth > minColWidth:
-                minColWidth = itemWidth
+            # Considering the text width, collapse/expand icon, & item the icon of the parent item...
+            itemTextWidth += 42
+            if itemTextWidth > minColWidth:
+                minColWidth = itemTextWidth
             
-            # Adding the files to their folder in the treeview...
-            for item in items:                
-                # Getting minimum width of the column (step 3 of 3)...
-                itemWidth = appFont.measure(item.name) + 58
-                if itemWidth > minColWidth:
-                    minColWidth = itemWidth
+            # Adding the files items to their parent folder item in the treeview...
+            for item in items:
+                itemTextWidth = wFont.measure(item.name)
                 
                 self.trvw_files.insert(
                     parent=parentNode,
                     index=tk.END,
                     text=item.name,
-                    image=self.img_file
+                    image=self.img_file,
+                    values=(
+                        {
+                            'textWidth': itemTextWidth
+                        }
+                    )
                 )
+
+                # Getting minimum width of the column (step 3 of 3)...
+                # Considering the text width and the item icon space...
+                itemTextWidth += 58
+                if itemTextWidth > minColWidth:
+                    minColWidth = itemTextWidth
             
             # Saving computed minimum width of the column...
             self._columnMinWidth = minColWidth
@@ -325,8 +362,37 @@ class DupFinder(tk.Tk):
         )
         self._observers.append(observer)
         observer.start()
+    
+    def _ShowLicense(self) -> None:
+        global _wins
+
+        titlePathPairs = []
+        titlePathPairs.append(
+            TitlePathPair(
+                'Read me',
+                'README.md'
+            )
+        )
+        titlePathPairs.append(
+            TitlePathPair(
+                'License',
+                'License'
+            )
+        )
+
+        lcnsDlg = LicenseDialog(titlePathPairs)
+        _wins.append(lcnsDlg)
+        lcnsDlg.mainloop()
 
 
 if (__name__ == '__main__'):
-    dup_finder_win = DupFinder()
-    dup_finder_win.mainloop()
+    # Defining of variables...
+    _wins: list[tk.Tk] = []
+
+    # Starting program...
+    try:
+        dup_finder_win = DupFinder()
+        dup_finder_win.mainloop()
+    finally:
+        for win in _wins:
+            win.destroy()

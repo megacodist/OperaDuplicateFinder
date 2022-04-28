@@ -1,0 +1,90 @@
+// Definning required data structures...
+STRUCTURE IDRoot
+	DEFINE id AS STRING
+	DEFINE root AS STRING
+ENDSTRUCTURE
+
+
+FUNCTION GetParentsAsSequence
+	INPUT:
+		item
+			a string of fully-qualified name of an item in the file system
+	OUTPUT:
+		paremts
+			a sequence (an array or a list) of parent folders in the file system with the ultimate ancestor as first and
+			last ancestor (the direct parent) of item as the last element
+        
+	// Every framework or the community of that framework offers a procedure or an API that serves this purpose
+	// for example in Python we can call pathlib.Path(item).parts
+ENDFUNCTION
+
+
+
+FUNCTION
+	INPUT:
+		dir
+			a string of fully-qualified name of a folder in the file system
+	OUTPUT:
+
+
+	// Definning a flag...
+	TO_DO_NOTHING    = 0x00
+	TO_BREAK_UP_ITEM = 0x01
+	TO_BREAK_UP_DIR  = 0x02
+
+	dirParts ◀── CALL GetParentsAsSequence WITH dir
+	dirPartsIndex ◀── 0
+	state ◀── TO_DO_NOTHING
+	currItem ◀── Get the root item of the tree view
+	WHILE dirParts not exhausted DO
+		currItemParts ◀── CALL GetParentsAsSequence WITH currItem.text
+		currItemPartsIndex ◀── 1
+
+		DO INDEFINITELT
+			LOOK FOR EXCEPTIONS
+				IF dirParts[dirPartsIndex] = currParts[currPartsIndex] THEN
+					INCREMENT dirPartsIndex
+					INCREMENT currItemPartsIndex 
+				ELSE
+					state ◀── TO_BREAK_UP_ITEM | TO_BREAK_UP_DIR
+					index ◀── 0
+					BREAK OUT OF this loop
+				ENDIF
+			EXCEPTION dirParts exhausted
+				DECREMENT dirPartsIndex
+				DECREMENT currItemPartsIndex
+				IF currItemPartsIndex is the last index of currItemParts THEN
+					// Not changing the initial value TO_DO_NOTHING of state to indicate updating currItem...
+					DD NOTHING
+				ELSE
+					state ◀── TO_BREAK_UP_ITEM
+				ENDIF
+				BREAK OUT OF outer loop
+			EXCEPTION currItemParts exhausted
+				BREAK OUT OF this loop
+			ENDLOOK
+		ENDDO
+
+		// Getting an ordered list of all folder children of currItem...
+		childrenList ◀── Create an empty ordered list
+		FOR EVERY childID IN currItem DO
+			IF childID is a folder THEN
+				childIDRoot = NEW IDRoot(
+					childID,
+					first part of childID.text
+				)
+				Add childID to childrenList
+			ENDIF
+		ENDFOR
+
+		index ◀── Search childrenList for dirParts[dirPartsIndex]
+		IF index specifies dirParts[dirPartsIndex] is not in childrenList THEN
+			state ◀── TO_BREAK_UP_DIR
+			index ◀── Get proper insertion position upon index
+			BREAK OUT OF this loop
+		ELSE
+			currItem ◀── childrenList[index]
+			INCREMENT dirPartsIndex
+		ENDIF
+	ENDWILE
+ENDFUNCTION

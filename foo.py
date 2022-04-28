@@ -1,25 +1,49 @@
 from msvcrt import getwche
 from PIL.ImageFont import FreeTypeFont
+from tkinter import ttk
 from tkinter.font import Font
 
-from megacodist.fonts import installed_fonts_str
-from megacodist.text import GetStringDimensions
+from megacodist.text import GetCommonAffix
 
-def mmm( *m, /, *, mmm=23) -> slice:
-    pass
+
+def _GetMemebers(typeObj: type, members: list[str]) -> None:
+    for member in dir(typeObj):
+        if member not in members:
+            members.append(member)
+    
+    for type_ in typeObj.__bases__:
+        _GetMemebers(type_, members)
 
 if __name__ == '__main__':
-    fonts = installed_fonts_str()
-    widthSet = set()
-    for font in fonts:
-        font_ = Font(
-            family=font,
-            size=12
-        )
-        width_ = font_.measure('Megacodist')
-        widthSet.add(width_)
-    
-    for result in widthSet:
-        print(result)
+    '''typeObj = ttk.Treeview
+    members = []
+    _GetMemebers(typeObj, members)
+    members.sort()
 
+    for member in members:
+        print(member)
+        print(help(getattr(typeObj, member)))'''
+    
+    import sys
+    import time
+    mmm = 'abcdefghijklmnopqrstuvwxyz'
+    while True:
+        slice_ = slice(None, 200, 2)
+        print(slice_.start)
+        print(slice_.stop)
+        print(slice_.step)
+        print(slice_.indices(len(mmm)))
+
+        time.sleep(3)
+        sys.exit(0)
+
+    n = int(input('Enter number of strings: '))
+    texts = []
+    for i in range(1, n + 1):
+        string = input(f'Enter {i}th string: ')
+        texts.append(string)
+    
+    slice_ = commonAfix(*texts, is_posfix=True)
+    print(slice_)
+    print(texts[0][slice_], flush=True)
     getwche()
