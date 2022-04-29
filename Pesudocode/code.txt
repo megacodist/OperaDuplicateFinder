@@ -54,7 +54,7 @@ FUNCTION
 				DECREMENT dirPartsIndex
 				DECREMENT currItemPartsIndex
 				IF currItemPartsIndex is the last index of currItemParts THEN
-					// Not changing the initial value TO_DO_NOTHING of state to indicate updating currItem...
+					// Not changing the initial value of TO_DO_NOTHING of state to indicate updating currItem...
 					DD NOTHING
 				ELSE
 					state ◀── TO_BREAK_UP_ITEM
