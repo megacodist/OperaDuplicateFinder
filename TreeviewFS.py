@@ -1,10 +1,13 @@
+from cmath import log
 from collections import namedtuple
-from enum import IntFlag, auto
+from enum import IntFlag
+import logging
+import os
 from pathlib import Path
+from PIL.ImageTk import PhotoImage
 import tkinter as tk
 from tkinter import ttk
 from tkinter.font import nametofont
-from typing import Literal
 
 from megacodist.exceptions import LoopBreakException
 from megacodist.collections import OrderedList, CollisionPolicy
@@ -27,38 +30,13 @@ class TreeviewFS(ttk.Treeview):
 
     def __init__(
         self,
-        master: tk.Misc | None = ...,
-        *,
-        class_: str = ...,
-        columns: str | list[str] | tuple[str, ...] = ...,
-        cursor: tk._Cursor = ...,
-        displaycolumns: str | list[str] | tuple[str, ...] | list[int] | tuple[int, ...] | Literal["#all"] = ...,
-        height: int = ...,
-        name: str = ...,
-        padding: tk._Padding = ...,
-        selectmode: Literal["extended", "browse", "none"] = ...,
-        show: Literal["tree", "headings", "tree headings", ""] | list[str] | tuple[str, ...] = ...,
-        style: str = ...,
-        takefocus: tk._TakeFocusValue = ...,
-        xscrollcommand: tk._XYScrollCommand = ...,
-        yscrollcommand: tk._XYScrollCommand = ...
+        master: tk.Misc | None = None,
+        **kwargs
     ) -> None:
         # Initializing super class...
         super().__init__(
             master,
-            class_=class_,
-            columns=columns,
-            cursor=cursor,
-            displaycolumns=displaycolumns,
-            height=height,
-            name=name,
-            padding=padding,
-            selectmode=selectmode,
-            show=show,
-            style=style,
-            takefocus=takefocus,
-            xscrollcommand=xscrollcommand,
-            yscrollcommand=yscrollcommand
+            **kwargs
         )
 
         # Getting the font of the tree view...
@@ -69,15 +47,14 @@ class TreeviewFS(ttk.Treeview):
             self._font = nametofont('TkDefaultFont')
         
         #
-        self.wait_visibility()
-        self.bind()
+        self.bind('<Configure>', self._OnWidthChanged)
         
         # Getting the minimum width of the column...
         self.update()
-        self._columnMinWidth = self.winfo_width('<Configure>', self._OnWidthChanged)
+        self._columnMinWidth = self.winfo_width() - 4
     
     def _OnWidthChanged(self, event: tk.Event) -> None:
-        if event.width > self._columnMinWidth:
+        if event.width - 4 > self._columnMinWidth:
             self.column(
                 '#0',
                 width=event.width
@@ -96,12 +73,16 @@ class TreeviewFS(ttk.Treeview):
             else:
                 files.append(child)
         
-        return tuple(
+        return tuple([
             tuple(folders),
             tuple(files)
-        )
+        ])
 
-    def AddFolder(self, dir: str | Path) -> None:
+    def AddFolder(
+        self,
+        dir: str | Path,
+        image: PhotoImage
+    ) -> None:
         # Checking dir parameter & getting dirParts
         if isinstance(dir, Path):
             dirParts = dir.parts
@@ -112,9 +93,51 @@ class TreeviewFS(ttk.Treeview):
         
         dirPartsIndex = 0
         status = _Status.TO_DO_NOTHING
-        currItem = self.item('')
+        # The root item id...
+        currItem = ''
+
         try:
-            while dirPartsIndex < len(dirParts):
+            while True:
+                # Getting an ordered list of all folder children of currItem...
+                foldersList = OrderedList(
+                    collision=CollisionPolicy.end,
+                    key=lambda item: item.root
+                )
+                for folderID in self.GetFoldersFiles(currItem)[0]:
+                    foldersList.Put(
+                        _IDRoot(
+                            folderID,
+                            Path(
+                                self.item(
+                                    folderID,
+                                    'text'
+                                )
+                            ).parts[0]
+                        )
+                    )
+                
+                # Getting index in the current item folder children...
+                index_ = foldersList.index(
+                    _IDRoot(None, dirParts[dirPartsIndex])
+                )
+                if index_ is None:
+                    index_ = 0
+                    status = _Status.TO_BREAK_DIR
+                    break
+                elif isinstance(index_, int):
+                    if index_ < 0:
+                        index_ = -index_
+                        status = _Status.TO_BREAK_DIR
+                        break
+                    else:
+                        currItem = foldersList[index_]
+                        dirPartsIndex += 1
+                else:
+                    # Oops, something went wrong, logging a warning...
+                    logging.warning(f"The return value of '{foldersList.__class__.__name__}.index' method must be either 'None' or 'int'.")
+                    return
+                
+                # Checking text of currItem...
                 currItemParts = Path(self.item(
                     currItem,
                     'text'
@@ -145,44 +168,9 @@ class TreeviewFS(ttk.Treeview):
                         # Checking currItemParts exhausted...
                         else:
                             break
-                
-                # Getting an ordered list of all folder children of currItem...
-                foldersList = OrderedList(
-                    collision=CollisionPolicy.end,
-                    key=lambda item: item[1]
-                )
-                for folder in self.GetFoldersFiles(currItem)[0]:
-                    foldersList.Put(
-                        _IDRoot(
-                            folder,
-                            Path(
-                                self.item(
-                                    folder,
-                                    'text'
-                                )
-                            ).parts[0]
-                        )
-                    )
-                
-                # Getting index in the current item folder children...
-                index_ = foldersList.index(dirParts[dirPartsIndex])
-                if index_ is None:
-                    index_ = 0
-                    status = _Status.TO_BREAK_DIR
-                    break
-                elif isinstance(index_, int):
-                    if index_ < 0:
-                        index_ = -index_
-                        status = _Status.TO_BREAK_DIR
-                        break
-                    else:
-                        currItem = foldersList[index_]
-                        dirPartsIndex += 1
-                else:
-                    # Oops, something went wrong, logging a warning...
-                    pass
         except LoopBreakException:
             pass
+
 
         # Checking the need to the current item...
         if status & _Status.TO_BREAK_ITEM:
@@ -196,11 +184,11 @@ class TreeviewFS(ttk.Treeview):
                 else:
                     currItemPos += 1
             
-            #
+            # Inserting new item in place of currItem with clipped text...
             newItem = self.insert(
                 parent=parentItem,
                 index=currItemPos,
-                text=currItemParts[:currItemPartsIndex],
+                text=os.sep.join(currItemParts[:currItemPartsIndex]),
                 open=True,
                 values=(
                     {
@@ -209,6 +197,36 @@ class TreeviewFS(ttk.Treeview):
                 )
             )
 
+            # Detaching currItem from tree view & adjusting its text...
+            self.detach(currItem)
+            self.item(
+                currItem,
+                text=os.sep.join(currItemParts[currItemPartsIndex:]),
+                values=(
+                    {
+                        'textWidth': self._font.measure(currItemParts[currItemPartsIndex:])
+                    }
+                )
+            )
+
+            #
+            self.move(
+                item=currItem,
+                parent=newItem,
+                index=0
+            )
+            currItem = newItem
+
         # Checking the need to the current item...
         if status & _Status.TO_BREAK_DIR:
-            pass
+            self.insert(
+                parent=currItem,
+                index=index_,
+                text=os.sep.join(dirParts[dirPartsIndex:]),
+                image=image,
+                values=(
+                    {
+                        'textWidth': self._font.measure(dirParts[dirPartsIndex:])
+                    }
+                )
+            )

@@ -5,26 +5,30 @@ STRUCTURE IDRoot
 ENDSTRUCTURE
 
 
-FUNCTION GetParentsAsSequence
-	INPUT:
-		item
-			a string of fully-qualified name of an item in the file system
-	OUTPUT:
-		paremts
-			a sequence (an array or a list) of parent folders in the file system with the ultimate ancestor as first and
-			last ancestor (the direct parent) of item as the last element
+FUNCTION GetHierarchyParts
+	INPUT
+		⬤ item
+			a string of a relative or absolute file system path
+	OUTPUT
+		⬤ parents
+			a sequence (an array or a list) of item hierarchy in the file system
+	DESCRIPTION
+		A file system path of an item is a string containing the hierarchy of
+		that item in the file system separated by a special character known as
+		path separator. This function turns the string path into a sequence of
+		hierarchical items.
         
-	// Every framework or the community of that framework offers a procedure or an API that serves this purpose
+	// Every framework or the community of that framework offers an API or a procedure that serves this purpose
 	// for example in Python we can call pathlib.Path(item).parts
 ENDFUNCTION
 
 
 
 FUNCTION
-	INPUT:
+	INPUT
 		dir
 			a string of fully-qualified name of a folder in the file system
-	OUTPUT:
+	OUTPUT
 
 
 	// Definning a flag...
@@ -32,27 +36,28 @@ FUNCTION
 	TO_BREAK_UP_ITEM = 0x01
 	TO_BREAK_UP_DIR  = 0x02
 
-	dirParts ◀── CALL GetParentsAsSequence WITH dir
+	dirParts ◀── CALL GetHierarchyParts WITH dir
 	dirPartsIndex ◀── 0
 	state ◀── TO_DO_NOTHING
+	index ◀── 0
 	currItem ◀── Get the root item of the tree view
-	WHILE dirParts not exhausted DO
-		currItemParts ◀── CALL GetParentsAsSequence WITH currItem.text
+	DO INDEFINITELT
+		currItemParts ◀── CALL GetHierarchyParts WITH the text of currItem
 		currItemPartsIndex ◀── 1
 
 		DO INDEFINITELT
 			LOOK FOR EXCEPTIONS
 				IF dirParts[dirPartsIndex] = currParts[currPartsIndex] THEN
-					INCREMENT dirPartsIndex
-					INCREMENT currItemPartsIndex 
+					INC dirPartsIndex
+					INC currItemPartsIndex 
 				ELSE
-					state ◀── TO_BREAK_UP_ITEM | TO_BREAK_UP_DIR
+					state ◀── TO_BREAK_UP_ITEM ∨ TO_BREAK_UP_DIR
 					index ◀── 0
 					BREAK OUT OF this loop
 				ENDIF
 			EXCEPTION dirParts exhausted
-				DECREMENT dirPartsIndex
-				DECREMENT currItemPartsIndex
+				DEC dirPartsIndex
+				DEC currItemPartsIndex
 				IF currItemPartsIndex is the last index of currItemParts THEN
 					// Not changing the initial value of TO_DO_NOTHING of state to indicate updating currItem...
 					DD NOTHING
@@ -65,7 +70,7 @@ FUNCTION
 			ENDLOOK
 		ENDDO
 
-		// Getting an ordered list of all folder children of currItem...
+		// GetHierarchyPartsting an ordered list of all folder children of currItem...
 		childrenList ◀── Create an empty ordered list
 		FOR EVERY childID IN currItem DO
 			IF childID is a folder THEN
@@ -80,7 +85,7 @@ FUNCTION
 		index ◀── Search childrenList for dirParts[dirPartsIndex]
 		IF index specifies dirParts[dirPartsIndex] is not in childrenList THEN
 			state ◀── TO_BREAK_UP_DIR
-			index ◀── Get proper insertion position upon index
+			index ◀── GetHierarchyParts proper insertion position upon index
 			BREAK OUT OF this loop
 		ELSE
 			currItem ◀── childrenList[index]
