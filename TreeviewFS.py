@@ -20,9 +20,9 @@ _IDRoot = namedtuple(
 
 
 class _Status(IntFlag):
-    TO_DO_NOTHING = 0x00
-    TO_BREAK_ITEM = 0x01
-    TO_BREAK_DIR  = 0x02
+    TO_ADD_FILES  = 0x01
+    TO_BREAK_ITEM = 0x02
+    TO_BREAK_DIR  = 0x04
 
 
 class TreeviewFS(ttk.Treeview):
@@ -31,6 +31,9 @@ class TreeviewFS(ttk.Treeview):
     def __init__(
         self,
         master: tk.Misc | None = None,
+         *,
+        img_folder: None | PhotoImage = None,
+        img_file: None | PhotoImage = None,
         **kwargs
     ) -> None:
         # Initializing super class...
@@ -38,6 +41,9 @@ class TreeviewFS(ttk.Treeview):
             master,
             **kwargs
         )
+        # Setting images...
+        self.img_folder = img_folder
+        self.img_file = img_file
 
         # Getting the font of the tree view...
         self._font = None
@@ -54,10 +60,11 @@ class TreeviewFS(ttk.Treeview):
         self._columnMinWidth = self.winfo_width() - 4
     
     def _OnWidthChanged(self, event: tk.Event) -> None:
-        if event.width - 4 > self._columnMinWidth:
+        newWidth = event.width - 4
+        if newWidth > self._columnMinWidth:
             self.column(
                 '#0',
-                width=event.width
+                width=newWidth
             )
 
     def GetFoldersFiles(self, iid: str) -> tuple[tuple[str], tuple[str]]:
@@ -80,19 +87,31 @@ class TreeviewFS(ttk.Treeview):
 
     def AddFolder(
         self,
-        dir: str | Path,
-        image: PhotoImage
+        dir: str | Path
     ) -> None:
+        '''Adds a older to the tree view. If the the folder does not exist of has no files inside, it raises
+        a ValueError.'''
+
         # Checking dir parameter & getting dirParts
-        if isinstance(dir, Path):
-            dirParts = dir.parts
-        elif isinstance(dir, str):
-            dirParts = Path(dir).parts
-        else:
+        if isinstance(dir, str):
+            dir = Path(dir)
+        elif not isinstance(dir, Path):
             raise TypeError("'dir' must be either a Path object or a string")
         
+        # Checking existence of files inside the folder...
+        try:
+            for item in dir.iterdir():
+                if item.is_file():
+                    break
+            else:
+                raise ValueError("'dir' either does not exist or has no files")
+        except Exception:
+            raise ValueError("'dir' either does not exist or has no files")
+        
+        # Starting algorithm...
+        dirParts = Path(dir).parts
         dirPartsIndex = 0
-        status = _Status.TO_DO_NOTHING
+        status = _Status.TO_ADD_FILES
         # The root item id...
         currItem = ''
 
@@ -101,7 +120,7 @@ class TreeviewFS(ttk.Treeview):
                 # Getting an ordered list of all folder children of currItem...
                 foldersList = OrderedList(
                     collision=CollisionPolicy.end,
-                    key=lambda item: item.root
+                    key=lambda item: item.root.lower()
                 )
                 for folderID in self.GetFoldersFiles(currItem)[0]:
                     foldersList.Put(
@@ -127,10 +146,10 @@ class TreeviewFS(ttk.Treeview):
                 elif isinstance(index_, int):
                     if index_ < 0:
                         index_ = -index_
-                        status = _Status.TO_BREAK_DIR
+                        status = status & _Status.TO_BREAK_DIR
                         break
                     else:
-                        currItem = foldersList[index_]
+                        currItem = foldersList[index_].id
                         dirPartsIndex += 1
                 else:
                     # Oops, something went wrong, logging a warning...
@@ -189,6 +208,7 @@ class TreeviewFS(ttk.Treeview):
                 parent=parentItem,
                 index=currItemPos,
                 text=os.sep.join(currItemParts[:currItemPartsIndex]),
+                image=self.img_folder,
                 open=True,
                 values=(
                     {
@@ -219,14 +239,34 @@ class TreeviewFS(ttk.Treeview):
 
         # Checking the need to the current item...
         if status & _Status.TO_BREAK_DIR:
-            self.insert(
+            dirID = self.insert(
                 parent=currItem,
                 index=index_,
                 text=os.sep.join(dirParts[dirPartsIndex:]),
-                image=image,
+                open=True,
+                image=self.img_folder,
                 values=(
                     {
                         'textWidth': self._font.measure(dirParts[dirPartsIndex:])
                     }
                 )
             )
+        
+            # Adding its files to the list...
+        if status &
+            filesList = OrderedList(key=lambda item: (item.stem.lower(), item.name.lower()))
+            for item in dir.iterdir():
+                if item.is_file():
+                    filesList.Put(item)
+            for file in filesList:
+                self.insert(
+                    parent=dirID,
+                    index='end',
+                    text=file.name,
+                    image=self.img_file,
+                    values=(
+                        {
+                            'textWidth': self._font.measure(file.name)
+                        }
+                    )
+                )

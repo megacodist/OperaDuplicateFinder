@@ -1,7 +1,6 @@
 from collections import namedtuple
 import tkinter as tk
 from tkinter import ttk
-from tkinter.scrolledtext import ScrolledText
 from typing import Iterable
 
 
@@ -32,32 +31,45 @@ class LicenseDialog(tk.Toplevel):
                 fill='both',
                 expand=1
             )
+
             hscrllbr_lcns = ttk.Scrollbar(
                 frm,
                 orient='horizontal'
             )
-            scrldtxt_lcns = ScrolledText(
+            vscrllbr_lcns = ttk.Scrollbar(
+                frm,
+                orient='vertical'
+            )
+            txt_lcns = tk.Text(
                 frm,
                 wrap='none',
             )
             hscrllbr_lcns.config(
-                command=scrldtxt_lcns.xview
+                command=txt_lcns.xview
             )
-            scrldtxt_lcns.config(
-                xscrollcommand=hscrllbr_lcns.set
+            vscrllbr_lcns.config(
+                command=txt_lcns.yview
+            )
+            txt_lcns.config(
+                xscrollcommand=hscrllbr_lcns.set,
+                yscrollcommand=vscrllbr_lcns.set
             )
             hscrllbr_lcns.pack(
                 side='bottom',
                 fill='x'
             )
-            scrldtxt_lcns.pack(
+            vscrllbr_lcns.pack(
+                side='right',
+                fill='y'
+            )
+            txt_lcns.pack(
                 fill='both',
                 side='top',
                 expand=1
             )
 
             with open(titlePath.path, 'rt') as lcnsStream:
-                scrldtxt_lcns.insert(
+                txt_lcns.insert(
                     tk.END,
                     lcnsStream.readlines()
                 )
@@ -66,4 +78,4 @@ class LicenseDialog(tk.Toplevel):
                 frm,
                 text=titlePath.title
             )
-            scrldtxt_lcns.config(state='disabled')
+            txt_lcns.config(state='disabled')

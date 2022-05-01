@@ -186,6 +186,8 @@ class DupFinder(tk.Tk):
         )
         self.trvw_files = TreeviewFS(
             self.frm_files,
+            img_folder=self.img_folder,
+            img_file=self.img_file,
             show='tree headings',
             selectmode='browse',
             xscrollcommand=self.hscrlbr_files.set,
@@ -231,10 +233,13 @@ class DupFinder(tk.Tk):
             title='Browse for a folder that contains duplicate files'
         )
         if folder:
-            self.trvw_files.AddFolder(
-                dir=folder,
-                image=self.img_folder
-            )
+            try:
+                self.trvw_files.AddFolder(folder)
+            except ValueError:
+                messagebox.showerror(
+                    title='Error',
+                    message=f"Folder '{folder}'\ndoes not have any file."
+                )
     
     def _OnItemSelectionChanged(self, event:tk.Event):
         # Checking selected item...

@@ -1,4 +1,5 @@
 from msvcrt import getwche
+from pathlib import Path
 from tkinter import ttk
 from tkinter.font import Font
 
@@ -26,9 +27,12 @@ if __name__ == '__main__':
     
 
     ol = OrderedList(
-        CollisionPolicy.end,
-        key=lambda item: item.root
+        key=lambda item: (item.stem.lower(), item.name.lower())
     )
-    print(
-        ol.index
-    )
+    _MODULE_DIR = Path(__file__).resolve().parent
+    for item in _MODULE_DIR.iterdir():
+        if item.is_file():
+            ol.Put(item)
+    
+    for item in ol:
+        print(item.name)
