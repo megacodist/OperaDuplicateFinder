@@ -4,19 +4,24 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
 from pathlib import Path
 import PIL.Image, PIL.ImageTk
+import platform
 from tkinter import filedialog
 from tkinter import messagebox
 import tkinter as tk
 from tkinter import ttk
-from tkinter.font import nametofont
 from typing import Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from TreeviewFS import TreeviewFS
 from dialogs import TitlePathPair, LicenseDialog
 
+
+# Definning global variables...
+_MODULE_DIR = Path(__file__).resolve().parent
 
 
 class DupFinder(tk.Tk):
@@ -63,6 +68,7 @@ class DupFinder(tk.Tk):
         # Defining of GUI widgets...
         self.frm_toolbar = None
         self.frm_files = None
+        self.frm_fsPath = None
         self.btn_browse = None
         self.btn_duplicate = None
         self.btn_license = None
@@ -74,9 +80,8 @@ class DupFinder(tk.Tk):
         self._InitializeGUI()
 
         # Binding events...
-        self.wait_visibility()
+        #self.wait_visibility()
         self.trvw_files.bind('<<TreeviewSelect>>', self._OnItemSelectionChanged)
-        self.trvw_files.bind('<Configure>', self._OnTreeViewWidthChanged)
 
         # Initializing last item...
         self._fsHandler = DupFinder.DirectoryEventHandler(dupFinder=self)
@@ -86,38 +91,32 @@ class DupFinder(tk.Tk):
 
         # Loading images...
         # Loading 'browse.png'...
-        self.img_browse = Path(__file__).resolve().parent
-        self.img_browse = self.img_browse / 'res/browse.png'
+        self.img_browse = _MODULE_DIR / 'res/browse.png'
         self.img_browse = PIL.Image.open(self.img_browse)
         self.img_browse = self.img_browse.resize(size=(24, 24,))
         self.img_browse = PIL.ImageTk.PhotoImage(image=self.img_browse)
         # Loading 'folder.png'...
-        self.img_folder = Path(__file__).resolve().parent
-        self.img_folder = self.img_folder / 'res/folder.png'
+        self.img_folder = _MODULE_DIR / 'res/folder.png'
         self.img_folder = PIL.Image.open(self.img_folder)
         self.img_folder = self.img_folder.resize(size=(24, 24,))
         self.img_folder = PIL.ImageTk.PhotoImage(image=self.img_folder)
         # Loading 'file.png'...
-        self.img_file = Path(__file__).resolve().parent
-        self.img_file = self.img_file / 'res/file.png'
+        self.img_file = _MODULE_DIR / 'res/file.png'
         self.img_file = PIL.Image.open(self.img_file)
         self.img_file = self.img_file.resize(size=(24, 24,))
         self.img_file = PIL.ImageTk.PhotoImage(image=self.img_file)
         # Loading 'unknown.png'...
-        self.img_unknown = Path(__file__).resolve().parent
-        self.img_unknown = self.img_unknown / 'res/unknown.png'
+        self.img_unknown = _MODULE_DIR / 'res/unknown.png'
         self.img_unknown = PIL.Image.open(self.img_unknown)
         self.img_unknown = self.img_unknown.resize(size=(24, 24,))
         self.img_unknown = PIL.ImageTk.PhotoImage(image=self.img_unknown)
         # Loading 'duplicate.png'...
-        self.img_duplicate = Path(__file__).resolve().parent
-        self.img_duplicate = self.img_duplicate / 'res/duplicate.png'
+        self.img_duplicate = _MODULE_DIR / 'res/duplicate.png'
         self.img_duplicate = PIL.Image.open(self.img_duplicate)
         self.img_duplicate = self.img_duplicate.resize(size=(24, 24,))
         self.img_duplicate = PIL.ImageTk.PhotoImage(image=self.img_duplicate)
         # Loading 'license.png'...
-        self.img_license = Path(__file__).resolve().parent
-        self.img_license = self.img_license / 'res/license.png'
+        self.img_license = _MODULE_DIR / 'res/license.png'
         self.img_license = PIL.Image.open(self.img_license)
         self.img_license = self.img_license.resize(size=(24, 24,))
         self.img_license = PIL.ImageTk.PhotoImage(image=self.img_license)
@@ -165,7 +164,26 @@ class DupFinder(tk.Tk):
             side=tk.LEFT
         )
 
+        # File system path frame --------------------------------
+        self.frm_fsPath = ttk.Frame(
+            self
+        )
+        self.frm_fsPath.pack(
+            side='bottom',
+            fill='x'
+        )
+
         #
+        self.entry_fsPath = tk.Text(
+            self.frm_fsPath,
+            height=1,
+            state='disabled'
+        )
+        self.entry_fsPath.pack(
+            fill='x'
+        )
+
+        # Folders & files frame -----------------------------------
         self.frm_files = ttk.Frame(
             self
         )
@@ -185,8 +203,10 @@ class DupFinder(tk.Tk):
             self.frm_files,
             orient='horizontal'
         )
-        self.trvw_files = ttk.Treeview(
+        self.trvw_files = TreeviewFS(
             self.frm_files,
+            img_folder=self.img_folder,
+            img_file=self.img_file,
             show='tree headings',
             selectmode='browse',
             xscrollcommand=self.hscrlbr_files.set,
@@ -201,7 +221,7 @@ class DupFinder(tk.Tk):
         # Configuring the default heading...
         self.trvw_files.heading(
             '#0',
-            text='Name',
+            text='Added folders',
             anchor=tk.W
         )
         # Configuring the default column...
@@ -232,167 +252,87 @@ class DupFinder(tk.Tk):
             title='Browse for a folder that contains duplicate files'
         )
         if folder:
-            self._EnumFiles(folder)
-    
-    def _OnTreeViewWidthChanged(self, event: tk.Event):
-        if event.width > self._columnMinWidth:
-            self.trvw_files.column('#0', width=event.width - 4)
+            try:
+                self.trvw_files.AddFolder(folder)
+            except Exception as err:
+                if len(err.args):
+                    msg = '\n'.join(err.args)
+                messagebox.showerror(
+                    title='Error',
+                    message=msg
+                )
     
     def _OnItemSelectionChanged(self, event:tk.Event):
         # Checking selected item...
         selectedItemID = self.trvw_files.selection()
         if not selectedItemID:
-            # This event has been fired for deselection, so disabling the duplicate button...
-            self.btn_duplicate['state'] = tk.DISABLED
+            # This event has been fired for deselection, so deleting the fsPath...
+            self.entry_fsPath['state'] = tk.NORMAL
+            self.entry_fsPath.delete('1.0', tk.END)
+            self.entry_fsPath['state'] = tk.DISABLED
             return
 
         # Getting selected item...
         selectedItemID = selectedItemID[0]
 
-        # Checking that selected item is a folder (has got childern item(s))...
-        childern = self.trvw_files.get_children(selectedItemID)
-        if len(childern):
-            self.btn_duplicate['state'] = tk.NORMAL
-        else:
-            self.btn_duplicate['state'] = tk.DISABLED
-        
-        '''# Printing the text of selected item in Treeview & all its parent...
-        while selectedItemID:
-            print(self.trvw_files.item(selectedItemID, option='text'))
-            selectedItemID = self.trvw_files.parent(selectedItemID)'''
-
-    def _EnumFiles(self, folder: str):
-        # First of all emptying the list...
-        self.trvw_files.delete(*self.trvw_files.get_children())
-        self._observers.clear()
-
-        # Second of all populating the list with files...
-        currentDir = Path(folder).resolve()
-        try:
-            # Retreiving all files in the folder...
-            items = []
-            for item in currentDir.iterdir():
-                if item.is_file():
-                    items.append(item)
-            
-            # Sorting items:
-            #   folders at the top
-            #   files in a way that XXXX.X comes before XXXX (1).X, XXXX (2).X
-            items.sort(key=lambda file : file.stem)
-
-            # Getting the font of the widget...
-            try:
-                wFont = self.trvw_files['font']
-            except tk.TclError:
-                wFont = nametofont('TkDefaultFont')
-            
-            # Getting minimum width of the column (step 1 of 3)...
-            # Initializing minColWidth with the width of the widget...
-            self.update()
-            minColWidth = self.trvw_files.winfo_width() - 4
-
-            # Adding parent to to the treeview...
-            itemTextWidth = wFont.measure(str(currentDir))
-            parentNode = self.trvw_files.insert(
-                '',
-                index=tk.END,
-                text=str(currentDir),
-                image=self.img_folder,
-                open=True,
-                values=(
-                    {
-                        'textWidth': itemTextWidth
-                    }
-                )
-            )
-
-            # Getting minimum width of the column (step 2 of 3)...
-            # Considering the text width, collapse/expand icon, & item the icon of the parent item...
-            itemTextWidth += 42
-            if itemTextWidth > minColWidth:
-                minColWidth = itemTextWidth
-            
-            # Adding the files items to their parent folder item in the treeview...
-            for item in items:
-                itemTextWidth = wFont.measure(item.name)
-                
-                self.trvw_files.insert(
-                    parent=parentNode,
-                    index=tk.END,
-                    text=item.name,
-                    image=self.img_file,
-                    values=(
-                        {
-                            'textWidth': itemTextWidth
-                        }
-                    )
-                )
-
-                # Getting minimum width of the column (step 3 of 3)...
-                # Considering the text width and the item icon space...
-                itemTextWidth += 58
-                if itemTextWidth > minColWidth:
-                    minColWidth = itemTextWidth
-            
-            # Saving computed minimum width of the column...
-            self._columnMinWidth = minColWidth
-            
-            # Sizing the column to minimum width...
-            self.trvw_files.column(
-                '#0',
-                width=minColWidth
-            )
-        except PermissionError as e:
-            messagebox.showerror(
-                'Access is denied',
-                str(e)
-            )
-        except Exception as e:
-            messagebox.showerror(
-                str(e.__class__.__name__),
-                str(e)
-            )
-        
-        # Setting a file system observer for this folder...
-        observer = Observer()
-        observer.schedule(
-            self._fsHandler,
-            folder,
-            recursive=False
+        # 
+        self.entry_fsPath['state'] = tk.NORMAL
+        self.entry_fsPath.delete('1.0', tk.END)
+        self.entry_fsPath.insert(
+            '1.0',
+            self.trvw_files.GetFullPath(selectedItemID)
         )
-        self._observers.append(observer)
-        observer.start()
+        self.entry_fsPath['state'] = tk.DISABLED
     
     def _ShowLicense(self) -> None:
-        global _wins
-
         titlePathPairs = []
         titlePathPairs.append(
             TitlePathPair(
                 'Read me',
-                'README.md'
+                _MODULE_DIR / 'README.md'
             )
         )
         titlePathPairs.append(
             TitlePathPair(
                 'License',
-                'License'
+                _MODULE_DIR / 'License'
             )
         )
 
         lcnsDlg = LicenseDialog(titlePathPairs)
-        _wins.append(lcnsDlg)
         lcnsDlg.mainloop()
 
 
 if (__name__ == '__main__'):
-    # Defining of variables...
-    _wins: list[tk.Tk] = []
+    # Configuring logging ============================================================================================================
+    # Getting root logger...
+    _logger = logging.getLogger()
+    _logger.setLevel(logging.INFO)
 
-    # Starting program...
-    try:
-        dup_finder_win = DupFinder()
-        dup_finder_win.mainloop()
-    finally:
-        for win in _wins:
-            win.destroy()
+    # Logging platform information...
+    _loggerPath = (Path(__name__).resolve().parent) / 'log.log'
+    _loggerFileStream = logging.FileHandler(_loggerPath, 'w')
+    _loggerFormatter = logging.Formatter('%(message)s')
+    _loggerFileStream.setFormatter(_loggerFormatter)
+    _logger.addHandler(_loggerFileStream)
+
+    _logNote = f'Operating system: {platform.system()} {platform.release()} (version: {platform.version()}) {platform.architecture()}'
+    logging.info(_logNote)
+    temp = '.'.join(platform.python_version_tuple())
+    _logNote = f'Python interpreter: {platform.python_implementation()} {temp}'
+    logging.info(_logNote + '\n\n')
+
+    # Logging program events...
+    _logger.removeHandler(_loggerFileStream)
+    _loggerFileStream = logging.FileHandler(_loggerPath, 'a')
+    _loggerFormatter = logging.Formatter(
+        fmt='[%(asctime)s]  %(module)s\n%(levelname)8s: %(message)s\n\n',
+        datefmt='%Y-%m-%d  %H:%M:%S'
+    )
+    _loggerFileStream.setFormatter(_loggerFormatter)
+    _logger.addHandler(_loggerFileStream)
+    logging.info('Started')
+
+    # Running the application ================================================
+    dup_finder_win = DupFinder()
+    dup_finder_win.mainloop()

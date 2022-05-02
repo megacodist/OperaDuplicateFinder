@@ -1,8 +1,13 @@
-from cmath import log
+# Copyright (c) 2022, Megacodist
+# All rights reserved.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 from collections import namedtuple
 from enum import IntFlag
+import json
 import logging
-import os
 from pathlib import Path
 from PIL.ImageTk import PhotoImage
 import tkinter as tk
@@ -20,9 +25,9 @@ _IDRoot = namedtuple(
 
 
 class _Status(IntFlag):
-    TO_ADD_FILES  = 0x01
-    TO_BREAK_ITEM = 0x02
-    TO_BREAK_DIR  = 0x04
+    TO_DO_NOTHING = 0x00
+    TO_BREAK_ITEM = 0x01
+    TO_BREAK_DIR  = 0x02
 
 
 class TreeviewFS(ttk.Treeview):
@@ -52,8 +57,11 @@ class TreeviewFS(ttk.Treeview):
         except tk.TclError:
             self._font = nametofont('TkDefaultFont')
         
-        #
+        # Binding events ------------------------------
+        # Binding the resize event...
         self.bind('<Configure>', self._OnWidthChanged)
+        # Binding the DELETE key event...
+        self.bind('<Delete>', self._OnDeleteKey)
         
         # Getting the minimum width of the column...
         self.update()
@@ -66,6 +74,33 @@ class TreeviewFS(ttk.Treeview):
                 '#0',
                 width=newWidth
             )
+    
+    def _OnDeleteKey(self, event: tk.Event)-> None:
+        # Getting selected item...
+        selectedItemID = self.selection()
+        if selectedItemID:
+            parentID = self.parent(selectedItemID[0])
+            self.delete(selectedItemID)
+
+            # If there is one sibbling folder, merging the parent and the sibbling...
+            pass
+    
+    def GetFullPath(
+        self,
+        id: str
+    ) -> str:
+        parts = []
+        while id:
+            text_ = self.item(
+                id,
+                'text'
+            )
+            parts.append(text_)
+
+            id = self.parent(id)
+        
+        parts.reverse()
+        return str(Path(*parts))
 
     def GetFoldersFiles(self, iid: str) -> tuple[tuple[str], tuple[str]]:
         '''Returns a pair (2-tuple) which first element is a tuple of all folder children and second element is
@@ -98,20 +133,21 @@ class TreeviewFS(ttk.Treeview):
         elif not isinstance(dir, Path):
             raise TypeError("'dir' must be either a Path object or a string")
         
-        # Checking existence of files inside the folder...
-        try:
-            for item in dir.iterdir():
-                if item.is_file():
-                    break
-            else:
-                raise ValueError("'dir' either does not exist or has no files")
-        except Exception:
-            raise ValueError("'dir' either does not exist or has no files")
+        # Checking existence of such folder in file system...
+        if not (dir.exists() and dir.is_dir()):
+            raise ValueError(f"'{str(dir)}'.\nSuch folder does not exist")
+        
+        # Checking whether dir contains at least one file...
+        for item in dir.iterdir():
+            if item.is_file():
+                break
+        else:
+            raise ValueError(f"'{str(dir)}' does not contain any file.")
         
         # Starting algorithm...
         dirParts = Path(dir).parts
         dirPartsIndex = 0
-        status = _Status.TO_ADD_FILES
+        status = _Status.TO_DO_NOTHING
         # The root item id...
         currItem = ''
 
@@ -146,7 +182,7 @@ class TreeviewFS(ttk.Treeview):
                 elif isinstance(index_, int):
                     if index_ < 0:
                         index_ = -index_
-                        status = status & _Status.TO_BREAK_DIR
+                        status = _Status.TO_BREAK_DIR
                         break
                     else:
                         currItem = foldersList[index_].id
@@ -176,12 +212,13 @@ class TreeviewFS(ttk.Treeview):
                     except IndexError:
                         # Checking dirParts exhausted...
                         if dirPartsIndex >= len(dirParts):
-                            dirPartsIndex -= 1
-                            currItemPartsIndex -= 1
-                            if currItemPartsIndex == (len(currItemParts) - 1):
+                            # Checking if currItemParts exhausted as well...
+                            if currItemPartsIndex >= len(currItemParts):
+                                # Both parts exhausted
                                 # Not changing the initial value of TO_DO_NOTHING of status to indicate updating currItem...
                                 pass
                             else:
+                                # Only dirParts exhausted
                                 status = _Status.TO_BREAK_ITEM
                             raise LoopBreakException()
                         # Checking currItemParts exhausted...
@@ -204,27 +241,31 @@ class TreeviewFS(ttk.Treeview):
                     currItemPos += 1
             
             # Inserting new item in place of currItem with clipped text...
+            text_ = str(Path(*currItemParts[:currItemPartsIndex]))
             newItem = self.insert(
                 parent=parentItem,
                 index=currItemPos,
-                text=os.sep.join(currItemParts[:currItemPartsIndex]),
+                text=text_,
                 image=self.img_folder,
                 open=True,
                 values=(
                     {
-                        'textWidth': self._font.measure(currItemParts[:currItemPartsIndex])
+                        'textWidth': self._font.measure(text_),
+                        'maxChildTextWidth': 0
                     }
                 )
             )
 
             # Detaching currItem from tree view & adjusting its text...
             self.detach(currItem)
+            text_ = str(Path(*currItemParts[currItemPartsIndex:]))
             self.item(
                 currItem,
-                text=os.sep.join(currItemParts[currItemPartsIndex:]),
+                text=text_,
                 values=(
                     {
-                        'textWidth': self._font.measure(currItemParts[currItemPartsIndex:])
+                        'textWidth': self._font.measure(text_),
+                        'maxChildTextWidth': 0
                     }
                 )
             )
@@ -237,36 +278,57 @@ class TreeviewFS(ttk.Treeview):
             )
             currItem = newItem
 
-        # Checking the need to the current item...
+        # Checking whether a portion of dir path...
         if status & _Status.TO_BREAK_DIR:
-            dirID = self.insert(
+            text_ = str(Path(*dirParts[dirPartsIndex:]))
+            currItem = self.insert(
                 parent=currItem,
                 index=index_,
-                text=os.sep.join(dirParts[dirPartsIndex:]),
+                text=text_,
                 open=True,
                 image=self.img_folder,
                 values=(
                     {
-                        'textWidth': self._font.measure(dirParts[dirPartsIndex:])
+                        'textWidth': self._font.measure(text_),
+                        'maxChildTextWidth': 0
                     }
                 )
             )
         
-            # Adding its files to the list...
-        if status &
+        # Checking to whether to retrieve  or update the folder content...
+        if status:
+            # The folder item created & its ID is currItem
+            # Getting its content...
             filesList = OrderedList(key=lambda item: (item.stem.lower(), item.name.lower()))
             for item in dir.iterdir():
                 if item.is_file():
                     filesList.Put(item)
+            maxChildTextWidth = 0
             for file in filesList:
+                textWidth = self._font.measure(file.name)
                 self.insert(
-                    parent=dirID,
+                    parent=currItem,
                     index='end',
                     text=file.name,
                     image=self.img_file,
                     values=(
                         {
-                            'textWidth': self._font.measure(file.name)
+                            'textWidth': textWidth
                         }
                     )
                 )
+                if maxChildTextWidth < textWidth:
+                    maxChildTextWidth = textWidth
+            values = self.item(currItem, 'values')
+            values = '{' + values[-1] + '}'
+            values = values.replace('\'', '"')
+            values = json.loads(values)
+            values['maxChildTextWidth'] = maxChildTextWidth
+            self.item(
+                currItem,
+                values=values
+            )
+        else:
+            # There is neither TO_BREAK_DIR nor TO_BREAK_ITEM flags
+            # Updating currItem...
+            pass
