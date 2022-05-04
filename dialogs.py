@@ -5,9 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 
 from collections import namedtuple
+from jinja2 import FileSystemLoader, Environment
 import tkinter as tk
 from tkinter import ttk
-from typing import Iterable
+from tkinterweb import HtmlFrame
+from typing import Any, Iterable
 
 
 TitlePathPair = namedtuple(
@@ -20,6 +22,9 @@ class LicenseDialog(tk.Toplevel):
     def __init__(self, files: Iterable[TitlePathPair]) -> None:
         super().__init__()
         self.geometry('300x400')
+        self.title(
+            ' & '.join(item.title for item in files)
+        )
 
         self.ntbk_lcns = ttk.Notebook(
             self
@@ -85,3 +90,44 @@ class LicenseDialog(tk.Toplevel):
                 text=titlePath.title
             )
             txt_lcns.config(state='disabled')
+
+
+class ResultDialog(tk.Toplevel):
+    def __init__(
+        self,
+        template_dir: list[str],
+        template_name: str,
+        context: dict[str, Any]
+    ) -> None:
+        super().__init__()
+        self.title('Report')
+
+
+        self._templateDir = template_dir
+        self._templateName = template_name
+        self._context=context
+
+        #
+        self.html_report = HtmlFrame(
+            self,
+            vertical_scrollbar=True,
+            horizontal_scrollbar=True,
+            messages_enabled=False
+        )
+        self.html_report.pack(
+            fill='both',
+            expand=1
+        )
+
+        self._RenderResult()
+    
+    def _RenderResult(self) -> None:
+        fsLoader = FileSystemLoader(searchpath=self._templateDir)
+        env = Environment(loader=fsLoader)
+        tmplt = env.get_template(name=self._templateName)
+        result_ = tmplt.render(**self._context)
+
+        self.html_report.load_html(
+            html_source=result_,
+            base_url=self._templateDir
+        )

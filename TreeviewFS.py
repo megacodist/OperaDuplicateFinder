@@ -14,6 +14,8 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.font import nametofont
 
+from duplicate_util import NameDirPair
+
 from megacodist.exceptions import LoopBreakException
 from megacodist.collections import OrderedList, CollisionPolicy
 
@@ -63,6 +65,7 @@ class TreeviewFS(ttk.Treeview):
         # Binding the DELETE key event...
         self.bind('<Delete>', self._OnDeleteKey)
         
+        # Treeview column width management----------------
         # Getting the minimum width of the column...
         self.update()
         self._columnMinWidth = self.winfo_width() - 4
@@ -150,7 +153,6 @@ class TreeviewFS(ttk.Treeview):
         status = _Status.TO_DO_NOTHING
         # The root item id...
         currItem = ''
-
         try:
             while True:
                 # Getting an ordered list of all folder children of currItem...
@@ -248,12 +250,7 @@ class TreeviewFS(ttk.Treeview):
                 text=text_,
                 image=self.img_folder,
                 open=True,
-                values=(
-                    {
-                        'textWidth': self._font.measure(text_),
-                        'maxChildTextWidth': 0
-                    }
-                )
+                values=(self._font.measure(text_),)
             )
 
             # Detaching currItem from tree view & adjusting its text...
@@ -262,12 +259,7 @@ class TreeviewFS(ttk.Treeview):
             self.item(
                 currItem,
                 text=text_,
-                values=(
-                    {
-                        'textWidth': self._font.measure(text_),
-                        'maxChildTextWidth': 0
-                    }
-                )
+                values=(self._font.measure(text_),)
             )
 
             #
@@ -287,12 +279,7 @@ class TreeviewFS(ttk.Treeview):
                 text=text_,
                 open=True,
                 image=self.img_folder,
-                values=(
-                    {
-                        'textWidth': self._font.measure(text_),
-                        'maxChildTextWidth': 0
-                    }
-                )
+                values=(self._font.measure(text_),)
             )
         
         # Checking to whether to retrieve  or update the folder content...
@@ -303,32 +290,134 @@ class TreeviewFS(ttk.Treeview):
             for item in dir.iterdir():
                 if item.is_file():
                     filesList.Put(item)
-            maxChildTextWidth = 0
             for file in filesList:
-                textWidth = self._font.measure(file.name)
                 self.insert(
                     parent=currItem,
                     index='end',
                     text=file.name,
                     image=self.img_file,
-                    values=(
-                        {
-                            'textWidth': textWidth
-                        }
-                    )
+                    values=(self._font.measure(file.name),)
                 )
-                if maxChildTextWidth < textWidth:
-                    maxChildTextWidth = textWidth
-            values = self.item(currItem, 'values')
-            values = '{' + values[-1] + '}'
-            values = values.replace('\'', '"')
-            values = json.loads(values)
-            values['maxChildTextWidth'] = maxChildTextWidth
-            self.item(
-                currItem,
-                values=values
-            )
         else:
             # There is neither TO_BREAK_DIR nor TO_BREAK_ITEM flags
             # Updating currItem...
             pass
+    
+    def GetFileDirList(self) -> list[NameDirPair]:
+        list_ = []
+        self._UpdateFileDirList(
+            '',
+            '',
+            list_
+        )
+        return list_
+
+    def _UpdateFileDirList(
+        self,
+        iid: str,
+        path: str,
+        filesList: list[NameDirPair]
+    ) -> None:
+        folders, files = self.GetFoldersFiles(iid)
+
+        for itemID in files:
+            filesList.append(
+                NameDirPair(
+                    name=self.item(itemID, 'text'),
+                    dir=path
+                )
+            )
+        
+        for itemID in folders:
+            self._UpdateFileDirList(
+                itemID,
+                str(Path(path, self.item(itemID, 'text'))),
+                filesList
+            )
+    
+    '''# Treeview column width management (1 of 5)
+    def _GetMaxTextWidth(self, level: int) -> int:
+        return self._GetMaxTextWidth_Recursively(
+            '',
+            0,
+            level
+        )
+
+    # Treeview column width management (2 of 5)
+    def _GetMaxTextWidth_Recursively(
+        self,
+        id: str,
+        thisLevel: int,
+        requestedLevel: int
+    ) -> int:
+        # Checking stop recursion condition...
+        if thisLevel == requestedLevel:
+            return self._font.measure(self.item(id, 'text'))
+        # Checking to continue recursion...
+        elif thisLevel < requestedLevel:
+            maxWidth = 0
+            for childID in self.GetFoldersFiles(childID)[0]:
+                width = self._GetMaxTextWidth_Recursively(
+                    id=childID,
+                    thisLevel=thisLevel + 1,
+                    requestedLevel=requestedLevel
+                )
+                if width > maxWidth:
+                    maxWidth = width
+            
+            return maxWidth
+        else:
+            # Oops something went wrong...
+            logging.warning("In '_GetMaxTextWidth_Recursively' it is impossible 'thisLevel' to be greater than 'requestedLevel'")
+    
+    # Treeview column width management (3 of 5)
+    def _UpdateLevel(
+        self,
+        level: int,
+        levelInfo: _LevelInfo
+    ) -> None:
+        try:
+            self._levelsInfo[level].count += levelInfo.count
+            if levelInfo.maxWidth > self._levelsInfo[level].maxWidth:
+                self._levelsInfo[level].maxWidth = levelInfo.maxWidth
+                self._SetColMinWidth()
+        except IndexError:
+            if level == len(self._levelsInfo):
+                self._levelsInfo.append(levelInfo)
+            else:
+                # Oops something went wrong...
+                logging.warning("In '_UpdateLevel', 'level' parameter is more than 1 beyond self._levelsInfo")
+    
+    # Treeview column width management (4 of 5)
+    def _SetColMinWidth(self) -> None:
+        FIRST_LEVEL_INDENT = 24
+        NEXT_LEVEL_INDENT = 16
+
+        indent = FIRST_LEVEL_INDENT
+        maxWidth = 0
+        for index in range(1, len(self._levelsInfo)):
+            indent += NEXT_LEVEL_INDENT
+            width = indent + self._levelsInfo[index].maxWidth
+            if width > maxWidth:
+                maxWidth = width
+        
+        if maxWidth > self._columnMinWidth:
+            self._columnMinWidth = maxWidth
+            self.column('#0', width=self._columnMinWidth)
+    
+    # Treeview column width management (5 of 5)
+    def _RemoveFromLevel(
+        self,
+        level: int,
+        levelInfo: _LevelInfo
+    ) -> None:
+        try:
+            self._levelsInfo[level].count -= levelInfo.count
+            if self._levelsInfo[level].count == 0:
+                if level + 1 == len(self._levelsInfo):
+                    self._levelsInfo.pop()
+                else:
+                    logging.warning("Items at level {level} deleted before some upper levels")
+            elif 
+        except IndexError:
+            pass'''

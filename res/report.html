@@ -1,0 +1,138 @@
+{#
+    This templates requires the following context:
+    context = {
+        allDuplicates: a list of lists of NameDirPair
+        allSimilars: a list of lists of NameDirPair
+    }
+#}
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <style>
+            body {
+                font-size: 16px;
+            }
+            table.table {
+                border-collapse: collapse;
+                /*border: 1px solid black;*/
+
+                text-align: left;
+
+                padding: 25px;
+            }
+            table.table thead tr {
+                border-top: 3px solid black;
+                border-bottom: 3px solid black;
+            }
+            table.table thead tr th {
+                padding: 6px;
+                font-size: 1.3rem;
+            }
+            table.table tbody tr {
+                border-bottom: 1px dashed black;
+            }
+            table.table tbody tr:nth-child(even) {
+                background-color: rgb(255, 255, 255);
+            }
+            table.table tbody tr:nth-child(odd) {
+                background-color:rgb(226, 226, 185);
+            }
+            table.table tbody th {
+                text-align: left;
+                padding: 5px;
+                background-color: rgba(223, 211, 211, 0.486);
+            }
+            table.table tbody td {
+                text-align: left;
+                padding: 5px;
+            }
+            div.container {
+                width: 90%;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            div.dup-box {
+                border-left: 5px solid rgb(156, 156, 216);
+                background-color: rgb(242, 238, 247);
+                margin: 10px;
+            }
+            div.sim-box {
+                border-left: 5px solid rgb(156, 216, 161);
+                background-color: rgb(227, 243, 209);
+                margin: 10px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+            {% set count = 0 %}
+            {% if not allDuplicates %}
+                {% set category = 'duplicate' %}
+                {% set count = count + 1 %}
+            {% endif %}
+
+            {% if not allSimilars %}
+                {% set category = 'similar' %}
+                {% set count = count + 1 %}
+            {% endif %}
+
+            {% if count == 1 %}
+                <h3>No {{ category }} file names were found.</h3>
+            {% else %}
+                {% if count == 2 %}
+                    <h3>Neither duplicate nor similar file names were found.</h3>
+                {% endif %}
+            {% endif %}
+
+            {% if allDuplicates %}
+                <div class="dup-box">
+                    <h3>Duplicate file nsmes are as follow:</h3>
+
+                    {% for duplicate in allDuplicates %}
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>File name</th>
+                                    <th>Directory</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in duplicate %}
+                                    <tr>
+                                        <th>{{ file.name }}</th>
+                                        <td>{{ file.dir }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if allSimilars %}
+                <div class="sim-box">
+                    <h3>Similar file names are as follow:</h3>
+
+                    {% for similar in allSimilars %}
+                        <table class="table">
+                            <thead>
+                                <th>File name</th>
+                                <th>Directory</th>
+                            </thead>
+                            <tbody>
+                                {% for file in similar %}
+                                    <tr>
+                                        <th>{{ file.name }}</th>
+                                        <td>{{ file.dir }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </body>
+</html>

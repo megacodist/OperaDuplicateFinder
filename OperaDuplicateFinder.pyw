@@ -16,8 +16,9 @@ from typing import Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from dialogs import TitlePathPair, LicenseDialog, ResultDialog
+from duplicate_util import NameDirPair, ReportDuplicates
 from TreeviewFS import TreeviewFS
-from dialogs import TitlePathPair, LicenseDialog
 
 
 # Definning global variables...
@@ -148,7 +149,7 @@ class DupFinder(tk.Tk):
         self.btn_duplicate = ttk.Button(
             master=self.frm_toolbar,
             image=self.img_duplicate,
-            state=tk.DISABLED
+            command=self._FindDuplicates
         )
         self.btn_duplicate.pack(
             side=tk.LEFT
@@ -301,6 +302,21 @@ class DupFinder(tk.Tk):
 
         lcnsDlg = LicenseDialog(titlePathPairs)
         lcnsDlg.mainloop()
+    
+    def _FindDuplicates(self) -> None:
+        filesList = self.trvw_files.GetFileDirList()
+        allDuplicates, allSimilars = ReportDuplicates(filesList)
+        context = {
+            'allDuplicates': allDuplicates,
+            'allSimilars': allSimilars
+        }
+
+        resultDlg = ResultDialog(
+            template_dir=str(_MODULE_DIR / 'res'),
+            template_name='report.html',
+            context=context
+        )
+        resultDlg.mainloop()
 
 
 if (__name__ == '__main__'):
