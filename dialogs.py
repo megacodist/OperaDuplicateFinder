@@ -114,12 +114,23 @@ class ResultDialog(tk.Toplevel):
             horizontal_scrollbar=True,
             messages_enabled=False
         )
+        #self.html_report.on_link_click(self._OnChoiceSubmitted)
+        self.html_report.on_form_submit(self._OnChoiceSubmitted)
         self.html_report.pack(
             fill='both',
             expand=1
         )
 
         self._RenderResult()
+    
+    def _OnChoiceSubmitted(
+        self,
+        url: str,
+        data: str,
+        method: str
+    ):
+        print(url, data, method)
+        self.destroy()
     
     def _RenderResult(self) -> None:
         fsLoader = FileSystemLoader(searchpath=self._templateDir)

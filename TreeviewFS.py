@@ -125,7 +125,8 @@ class TreeviewFS(ttk.Treeview):
 
     def AddFolder(
         self,
-        dir: str | Path
+        dir: str | Path,
+        subfolders: bool = False
     ) -> None:
         '''Adds a older to the tree view. If the the folder does not exist of has no files inside, it raises
         a ValueError.'''

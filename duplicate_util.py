@@ -43,12 +43,9 @@ def ReportDuplicates(filesList: list[NameDirPair]) -> tuple[list[list[NameDirPai
                 if commonPrefixIndex < lenFirstFileNoExt:
                     break
 
-                match = re.search(
-                    r'^\s*\(\d+\)$',
-                    nextFileNoExt[commonPrefixIndex:]
-                )
+                isDupPosfix = IsDuplicatePostfix(nextFileNoExt[commonPrefixIndex:])
 
-                if match:
+                if isDupPosfix:
                     duplicates.append(filesList[j])
                 else:
                     similars.append(filesList[j])
@@ -66,3 +63,50 @@ def ReportDuplicates(filesList: list[NameDirPair]) -> tuple[list[list[NameDirPai
         i = j
     
     return allDuplicates, allSimilars
+
+
+def IsDuplicatePostfix(text: str) -> bool:
+    '''Determines if 'text' is a duplicate postfix like ' - (23)', '_23', and so on. The following categories will be identified:
+    
+    ⬤ XXXX - 23
+    ⬤ XXXX - (23)
+    ⬤ XXXX-23
+    ⬤ XXXX-(23)
+    ⬤ XXXX _ 23
+    ⬤ XXXX _ (23)
+    ⬤ XXXX_23
+    ⬤ XXXX_(23)
+    ⬤ XXXX(23)
+    ⬤ XXXX (23)
+    ⬤ XXXX_copy
+    ⬤ XXXX-copy
+    ⬤ XXXX copy
+    ⬤ XXXX - copy
+    ⬤ XXXX _ copy
+    ⬤ XXXX_copy copy
+    ⬤ XXXX - copy - copy
+    ⬤ XXXX copy copy
+    and so on.'''
+    
+    match = re.search(
+        r'^\s*[-_]+\s*\(\?\d+\)?$',
+        text
+    )
+    if match:
+        return True
+    
+    match = re.search(
+        r'^\s*\(\d+\)$',
+        text
+    )
+    if match:
+        return True
+    
+    match = re.search(
+        r'(?:[-_ ]*copy)+',
+        text
+    )
+    if match:
+        return True
+    
+    return False
