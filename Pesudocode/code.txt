@@ -11,15 +11,17 @@ FUNCTION GetHierarchyParts
 			a string of a relative or absolute file system path
 	OUTPUT
 		⬤ parents
-			a sequence (an array or a list) of item hierarchy in the file system
+			a sequence (an array or a list) of item hierarchy in the file
+			system
 	DESCRIPTION
 		A file system path of an item is a string containing the hierarchy of
 		that item in the file system separated by a special character known as
 		path separator. This function turns the string path into a sequence of
 		hierarchical items.
         
-	// Every framework or the community of that framework offers an API or a procedure that serves this purpose
-	// for example in Python we can call pathlib.Path(item).parts
+	// Every framework or the community of that framework offers an API or a
+	// procedure that serves this purpose for example in Python we can call
+	// pathlib.Path(item).parts
 ENDFUNCTION
 
 

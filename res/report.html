@@ -9,7 +9,7 @@
 #}
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
     <head>
         <style>
             body {
@@ -80,25 +80,6 @@
 
     <body>
         <div class="container">
-            {#{% set count = 0 %}
-            {% if not allDuplicates %}
-                {% set category = 'duplicate' %}
-                {% set count = count + 1 %}
-            {% endif %}
-
-            {% if not allSimilars %}
-                {% set category = 'similar' %}
-                {% set count = count + 1 %}
-            {% endif %}
-
-            {% if count == 1 %}
-                <h3>No {{ category }} file names were found.</h3>
-            {% else %}
-                {% if count == 2 %}
-                    <h3>Neither duplicate nor similar file names were found.</h3>
-                {% endif %}
-            {% endif %}#}
-
             <div class="dup-box">
                 {% if allDuplicates %}
                     <h3>Duplicate file nsmes are as follow:</h3>
