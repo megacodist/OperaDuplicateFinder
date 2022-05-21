@@ -35,13 +35,14 @@ class TreeviewFS(ttk.Treeview):
     '''
 
     def __init__(
-        self,
-        master: tk.Misc | None = None,
-        *,
-        img_folder: None | PhotoImage = None,
-        img_file: None | PhotoImage = None,
-        **kwargs
-    ) -> None:
+            self,
+            master: tk.Misc | None = None,
+            *,
+            img_folder: None | PhotoImage = None,
+            img_file: None | PhotoImage = None,
+            **kwargs
+            ) -> None:
+
         # Initializing super class...
         super().__init__(
             master,
@@ -109,6 +110,16 @@ class TreeviewFS(ttk.Treeview):
                     index='end')
 
             self.delete(folders[0])
+
+    @classmethod
+    def _CompareFolders(cls, folder: Path) -> str:
+        """Defines the comparer for an OrderedList that contains folders."""
+        return folder.root.lower()
+
+    @classmethod
+    def _CompareFiles(cls, file: Path) -> tuple[str, str]:
+        """Defines the comparer for an OrderedList that contains files."""
+        return (file.stem.lower(), file.name.lower())
 
     def GetFullPath(
         self,
@@ -183,7 +194,7 @@ class TreeviewFS(ttk.Treeview):
                 # Getting an ordered list of all folder children of currItem...
                 foldersList = OrderedList(
                     collision=CollisionPolicy.end,
-                    key=lambda item: item.root.lower()
+                    key=TreeviewFS._CompareFolders
                 )
                 for folderID in self.GetFoldersFiles(currItem)[0]:
                     foldersList.Put(
@@ -258,7 +269,7 @@ class TreeviewFS(ttk.Treeview):
         except LoopBreakException:
             pass
 
-        # Checking the need to the current item...
+        # Checking the need to break the current item...
         if status & _Status.TO_BREAK_ITEM:
             parentItem = self.parent(currItem)
 
@@ -298,7 +309,7 @@ class TreeviewFS(ttk.Treeview):
             )
             currItem = newItem
 
-        # Checking whether a portion of dir path...
+        # Checking whether only a portion of dir path is needed...
         if status & _Status.TO_BREAK_DIR:
             text_ = str(Path(*dirParts[dirPartsIndex:]))
             currItem = self.insert(
@@ -314,8 +325,7 @@ class TreeviewFS(ttk.Treeview):
         if status:
             # The folder item created & its ID is currItem
             # Getting its content...
-            filesList = OrderedList(
-                key=lambda item: (item.stem.lower(), item.name.lower()))
+            filesList = OrderedList(key=TreeviewFS._CompareFiles)
             for item in dir.iterdir():
                 if item.is_file():
                     filesList.Put(item)
@@ -330,9 +340,31 @@ class TreeviewFS(ttk.Treeview):
         else:
             # There is neither TO_BREAK_DIR nor TO_BREAK_ITEM flags
             # Updating currItem...
-            pass
+            self._UpdateItem(currItem)
 
-    def GetFileDirList(self) -> list[NameDirPair]:
+    def _UpdateItem(self, iid: str) -> None:
+        # Getting all current folders & files in the list...
+        folders, files = self.GetFoldersFiles(iid)
+        filesList = OrderedList(
+            collision=CollisionPolicy.ignore,
+            key=TreeviewFS._CompareFiles)
+        for file in files:
+            filesList.Put(file)
+        # Getting all files of iid in the file system...
+        # Adding them to the TreeViewFS
+        parentFSPath = Path(self.GetFullPath(iid))
+        for item in parentFSPath.iterdir():
+            if item.is_file():
+                idx = filesList.Put(item)
+                if idx:
+                    self.insert(
+                        parent=iid,
+                        index=idx + len(folders),
+                        text=item.name,
+                        image=self.img_file,
+                        values=(self._font.measure(item.name),))
+
+    '''def GetFileDirList(self) -> list[NameDirPair]:
         list_ = []
         self._UpdateFileDirList(
             '',
@@ -342,11 +374,12 @@ class TreeviewFS(ttk.Treeview):
         return list_
 
     def _UpdateFileDirList(
-        self,
-        iid: str,
-        path: str,
-        filesList: list[NameDirPair]
-    ) -> None:
+            self,
+            iid: str,
+            path: str,
+            filesList: list[NameDirPair]
+            ) -> None:
+
         folders, files = self.GetFoldersFiles(iid)
 
         for itemID in files:
@@ -362,4 +395,4 @@ class TreeviewFS(ttk.Treeview):
                 itemID,
                 str(Path(path, self.item(itemID, 'text'))),
                 filesList
-            )
+            )'''

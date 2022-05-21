@@ -23,7 +23,7 @@ from utils import ReportDuplicates, AppSettings
 from TreeviewFS import TreeviewFS
 
 
-class DupFinder(tk.Tk):
+class DupFinderWin(tk.Tk):
     def __init__(
             self,
             appDir: Path,

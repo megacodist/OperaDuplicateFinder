@@ -20,13 +20,33 @@ import pickle
 import platform
 from threading import Lock
 from time import sleep
-from typing import Any
-
-from megacodist.singleton import SingletonMeta
-from megacodist.text import GetCommonAffix
+from typing import Any, Sequence
 
 
-class AppSettings(object, metaclass=SingletonMeta):
+class LoopBreakException(Exception):
+    '''This exception is used to break nested loops.'''
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class _SingletonMeta(type):
+    """Apply this meta clss to any class that you want to be singleton
+    """
+
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        """
+        Possible changes to the value of the `__init__` argument do not affect
+        the returned instance.
+        """
+        if cls not in cls._instances:
+            instance = super().__call__(*args, **kwargs)
+            cls._instances[cls] = instance
+        return cls._instances[cls]
+
+
+class AppSettings(object, metaclass=_SingletonMeta):
     """Encapsulates APIs for persistence settings between different sessions
     of the application. This class offers a singleton object which must
     typically be used as follow:
@@ -204,6 +224,50 @@ def ConfigureLogging(filepath: str | Path) -> None:
         datefmt='%Y-%m-%d  %H:%M:%S')
     loggerFileStream.setFormatter(loggerFormatter)
     logger.addHandler(loggerFileStream)
+
+
+def GetCommonAffix(
+        *texts: Sequence,
+        is_suffix: bool = False
+        ) -> slice:
+    '''Returns the common affix, either prefix or suffix, of two or more
+    sequences and returns a slice object specifying the intersection (at
+    the start or end). It accepts two or more sequences, aggregated in
+    'texts' parameter, if less is provided TypeError exception will be
+    raised. The optional 'is_suffix' parameter specifies the affix, either
+    prefix or suffix. So to find the common suffix set this parameter
+    to true.
+    '''
+
+    # Checking parameters...
+    if len(texts) < 2:
+        raise TypeError('At least two sequences must be provided.')
+
+    if is_suffix:
+        startIndex = -1
+        increment = -1
+    else:
+        startIndex = 0
+        increment = 1
+
+    index = startIndex
+    while True:
+        try:
+            for seqIndex in range(len(texts) - 1):
+                if texts[seqIndex][index] != texts[seqIndex + 1][index]:
+                    # Stopping comparisons
+                    # when the first inequality if found...
+                    raise LoopBreakException
+        except (IndexError, LoopBreakException):
+            # Stopping comparisons when the first sequence is exhausted...
+            break
+
+        index += increment
+
+    if is_suffix:
+        return slice(index - startIndex, None)
+    else:
+        return slice(startIndex, index)
 
 
 def ReportDuplicates(

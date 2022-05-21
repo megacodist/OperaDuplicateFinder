@@ -7,7 +7,7 @@
 import logging
 from pathlib import Path
 
-from dup_finder import DupFinder
+from dup_finder_win import DupFinderWin
 from utils import ConfigureLogging, AppSettings
 
 
@@ -24,7 +24,7 @@ if (__name__ == '__main__'):
     AppSettings().Load(_MODULE_DIR / 'bin.bin')
 
     # Running the application...
-    dupFinderWin = DupFinder(appDir=_MODULE_DIR)
+    dupFinderWin = DupFinderWin(appDir=_MODULE_DIR)
     dupFinderWin.mainloop()
 
     # Saving settings for next session...
