@@ -22,31 +22,11 @@ from threading import Lock
 from time import sleep
 from typing import Any, Sequence
 
-
-class LoopBreakException(Exception):
-    '''This exception is used to break nested loops.'''
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)
+from megacodist.exceptions import LoopBreakException
+from megacodist.singleton import SingletonMeta
 
 
-class _SingletonMeta(type):
-    """Apply this meta clss to any class that you want to be singleton
-    """
-
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        """
-        Possible changes to the value of the `__init__` argument do not affect
-        the returned instance.
-        """
-        if cls not in cls._instances:
-            instance = super().__call__(*args, **kwargs)
-            cls._instances[cls] = instance
-        return cls._instances[cls]
-
-
-class AppSettings(object, metaclass=_SingletonMeta):
+class AppSettings(object, metaclass=SingletonMeta):
     """Encapsulates APIs for persistence settings between different sessions
     of the application. This class offers a singleton object which must
     typically be used as follow:

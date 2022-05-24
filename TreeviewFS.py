@@ -15,7 +15,6 @@ from tkinter.font import nametofont
 
 from megacodist.exceptions import LoopBreakException
 from megacodist.collections import OrderedList, CollisionPolicy
-from utils import NameDirPair
 
 
 _IDRoot = namedtuple(
