@@ -14,7 +14,9 @@ from tkinter import ttk
 from tkinter.font import nametofont
 
 from megacodist.exceptions import LoopBreakException
-from megacodist.collections import OrderedList, CollisionPolicy
+from megacodist.collections import SortedList, CollisionPolicy
+
+from utils import NameDirPair
 
 
 _IDRoot = namedtuple(
@@ -112,18 +114,18 @@ class TreeviewFS(ttk.Treeview):
 
     @classmethod
     def _CompareFolders(cls, folder: Path) -> str:
-        """Defines the comparer for an OrderedList that contains folders."""
+        """Defines the comparer for a SortedList that contains folders."""
         return folder.root.lower()
 
     @classmethod
     def _CompareFiles(cls, file: Path) -> tuple[str, str]:
-        """Defines the comparer for an OrderedList that contains files."""
-        return (file.stem.lower(), file.name.lower())
+        """Defines the comparer for a SortedList that contains files."""
+        return (file.stem.lower(), file.name.lower(),)
 
     def GetFullPath(
-        self,
-        id: str
-    ) -> str:
+            self,
+            id: str
+            ) -> str:
         parts = []
         while id:
             text_ = self.item(
@@ -161,7 +163,7 @@ class TreeviewFS(ttk.Treeview):
         dir: str | Path,
         subfolders: bool = False
     ) -> None:
-        '''Adds a older to the tree view. If the the folder does not exist
+        '''Adds a folder to the tree view. If the the folder does not exist
         of has no files inside, it raises a ValueError.
         '''
 
@@ -191,8 +193,8 @@ class TreeviewFS(ttk.Treeview):
         try:
             while True:
                 # Getting an ordered list of all folder children of currItem...
-                foldersList = OrderedList(
-                    collision=CollisionPolicy.end,
+                foldersList = SortedList(
+                    cp=CollisionPolicy.END,
                     key=TreeviewFS._CompareFolders
                 )
                 for folderID in self.GetFoldersFiles(currItem)[0]:
@@ -212,7 +214,14 @@ class TreeviewFS(ttk.Treeview):
                 index_ = foldersList.index(
                     _IDRoot(None, dirParts[dirPartsIndex])
                 )
-                if index_ is None:
+                if index_[0]:
+                    currItem = foldersList[index_[1]].id
+                    dirPartsIndex += 1
+                else:
+                    index_ = index_[1]
+                    status = _Status.TO_BREAK_DIR
+                    break
+                '''if index_ is None:
                     index_ = 0
                     status = _Status.TO_BREAK_DIR
                     break
@@ -230,7 +239,7 @@ class TreeviewFS(ttk.Treeview):
                         f"The return value of "
                         f"'{foldersList.__class__.__name__}.index' method "
                         f"must be either 'None' or 'int'.")
-                    return
+                    return'''
 
                 # Checking text of currItem...
                 currItemParts = Path(self.item(
@@ -320,14 +329,14 @@ class TreeviewFS(ttk.Treeview):
                 values=(self._font.measure(text_),)
             )
 
-        # Checking to whether to retrieve  or update the folder content...
+        # Checking whether to retrieve or update the folder content...
         if status:
             # The folder item created & its ID is currItem
             # Getting its content...
-            filesList = OrderedList(key=TreeviewFS._CompareFiles)
+            filesList = SortedList(key=TreeviewFS._CompareFiles)
             for item in dir.iterdir():
                 if item.is_file():
-                    filesList.Put(item)
+                    filesList.add(item)
             for file in filesList:
                 self.insert(
                     parent=currItem,
@@ -344,8 +353,8 @@ class TreeviewFS(ttk.Treeview):
     def _UpdateItem(self, iid: str) -> None:
         # Getting all current folders & files in the list...
         folders, files = self.GetFoldersFiles(iid)
-        filesList = OrderedList(
-            collision=CollisionPolicy.ignore,
+        filesList = SortedList(
+            collision=CollisionPolicy.IGNORE,
             key=TreeviewFS._CompareFiles)
         for file in files:
             filesList.Put(file)
@@ -363,7 +372,7 @@ class TreeviewFS(ttk.Treeview):
                         image=self.img_file,
                         values=(self._font.measure(item.name),))
 
-    '''def GetFileDirList(self) -> list[NameDirPair]:
+    def GetFileDirList(self) -> list[NameDirPair]:
         list_ = []
         self._UpdateFileDirList(
             '',
@@ -394,4 +403,4 @@ class TreeviewFS(ttk.Treeview):
                 itemID,
                 str(Path(path, self.item(itemID, 'text'))),
                 filesList
-            )'''
+            )

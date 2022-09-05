@@ -260,18 +260,17 @@ class DupFinderWin(tk.Tk):
             if answer.lower() == 'yes':
                 subfolders = True
 
-            try:
-                self.trvw_files.AddFolder(
-                    folder,
-                    subfolders=subfolders
-                )
-            except Exception as err:
+            self.trvw_files.AddFolder(
+                folder,
+                subfolders=subfolders
+            )
+            '''except Exception as err:
                 if len(err.args):
                     msg = '\n'.join(err.args)
                 messagebox.showerror(
                     title='Error',
                     message=msg
-                )
+                )'''
 
     def _OnItemSelectionChanged(self, event: tk.Event):
         # Checking selected item...
